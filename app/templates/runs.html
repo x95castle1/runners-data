@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}All runs · Runners Data{% endblock %}
+
+{% block body %}
+  <h1>All runs</h1>
+  <p class="sub">
+    {{ totals.runs }} run{{ '' if totals.runs == 1 else 's' }} ·
+    {{ totals.miles | num }} mi
+    {%- if filters.status == 'completed' %} ·
+      {{ totals.seconds | duration }} ·
+      {{ totals.avg_pace | pace }}/mi average
+      {%- if totals.avg_hr %} · {{ totals.avg_hr }} bpm average{% endif %}
+    {%- else %}
+      {%- if filters.status == 'all' %}
+        <span style="color: var(--muted)">— completed and planned together, so no meaningful pace</span>
+      {%- else %}
+        <span style="color: var(--muted)">— no time or pace, these haven't been run</span>
+      {%- endif %}
+    {%- endif %}
+  </p>
+
+  {% if has_data %}
+    <div class="chips">
+      {% for link in status_links %}
+        <a class="chip {{ 'on' if link.active }}" href="{{ link.url }}">{{ link.label }}</a>
+      {% endfor %}
+    </div>
+
+    <div class="chips">
+      {% for range in quick_ranges %}
+        <a class="chip {{ 'on' if range.active }}" href="{{ range.url }}">{{ range.label }}</a>
+      {% endfor %}
+    </div>
+
+    <form class="filters" method="get" action="/runs">
+      <label>From
+        <input type="date" name="start" value="{{ filters.start }}">
+      </label>
+      <label>To
+        <input type="date" name="end" value="{{ filters.end }}">
+      </label>
+      <label>Workout type
+        <select name="type">
+          <option value="">All types</option>
+          {% for t in types %}
+            <option value="{{ t }}" {{ 'selected' if t == filters.type }}>{{ t }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <input type="hidden" name="status" value="{{ filters.status }}">
+      <input type="hidden" name="sort" value="{{ filters.sort }}">
+      <input type="hidden" name="dir" value="{{ filters.dir }}">
+      <div class="actions">
+        <button class="btn primary" type="submit">Apply</button>
+        <a class="btn" href="/runs">Clear</a>
+      </div>
+    </form>
+
+    <div class="card">
+      <div class="table-scroll">
+        {% set rows = runs %}
+        {% include "_runs_table.html" %}
+      </div>
+      {% if runs | length >= 500 %}
+        <p class="sub" style="margin:16px 0 0">
+          Showing the first 500 rows. Narrow the date range to see the rest.
+        </p>
+      {% endif %}
+    </div>
+  {% else %}
+    {% include "_empty.html" %}
+  {% endif %}
+{% endblock %}

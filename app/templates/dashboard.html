@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · Runners Data{% endblock %}
+
+{% block body %}
+  <h1>Training dashboard</h1>
+  {% if has_data %}
+    <p class="sub">
+      {{ summary.runs }} runs from {{ summary.first_date | day('%b %-d, %Y') }}
+      to {{ summary.last_date | day('%b %-d, %Y') }}
+      {%- if has_older %}
+        ·
+        {% if scope == 'all' %}
+          <a href="/">this training block only</a>
+        {% else %}
+          <a href="/?scope=all">include everything before {{ block_start | day('%b %Y') }}</a>
+        {% endif %}
+      {%- endif %}
+    </p>
+
+    <div class="tiles">
+      <div class="tile">
+        <div class="label">This week</div>
+        <div class="value">
+          {{ this_week.miles | num }}{% if this_week.planned_miles %}<span class="unit">of {{ this_week.plan_total | num }}</span>{% else %}<span class="unit">mi</span>{% endif %}
+        </div>
+        <div class="foot">
+          {% if this_week.planned_miles %}
+            {{ this_week.planned_runs }} run{{ '' if this_week.planned_runs == 1 else 's' }} left on the plan
+          {% else %}
+            {% set delta = this_week.miles - last_week.miles %}
+            {% if last_week.miles %}
+              {% if delta >= 0 %}<span class="up">▲ {{ delta | num }} mi</span>{% else %}▼ {{ (-delta) | num }} mi{% endif %}
+              vs last week
+            {% else %}
+              {{ this_week.runs }} run{{ '' if this_week.runs == 1 else 's' }} so far
+            {% endif %}
+          {% endif %}
+        </div>
+      </div>
+      <div class="tile">
+        <div class="label">Total distance</div>
+        <div class="value">{{ summary.miles | num }}<span class="unit">mi</span></div>
+        <div class="foot">across {{ summary.runs }} runs</div>
+      </div>
+      <div class="tile">
+        <div class="label">Longest run</div>
+        <div class="value">{{ summary.longest | num }}<span class="unit">mi</span></div>
+        <div class="foot">
+          {% if bests.longest_run %}{{ bests.longest_run.date | day('%b %-d') }}{% endif %}
+        </div>
+      </div>
+      <div class="tile">
+        <div class="label">Average pace</div>
+        <div class="value">{{ summary.avg_pace | pace }}<span class="unit">/mi</span></div>
+        <div class="foot">time ÷ distance, all runs</div>
+      </div>
+      <div class="tile">
+        <div class="label">Time on feet</div>
+        <div class="value">{{ (summary.seconds / 3600) | num(0) }}<span class="unit">hrs</span></div>
+        <div class="foot">{{ summary.seconds | duration }} total</div>
+      </div>
+      {% if race and not race.past %}
+      <div class="tile">
+        <div class="label">{{ race.name }}</div>
+        <div class="value">{{ race.days }}<span class="unit">days</span></div>
+        <div class="foot">{{ race.date | day('%b %-d, %Y') }}</div>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Weekly mileage</h2>
+        <span class="note">last {{ weekly | length }} weeks, Monday to Sunday</span>
+        <a class="table-link" href="/runs">table view</a>
+      </div>
+      <div class="chart tall"><canvas id="weekly-chart"></canvas></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-head">
+          <h2>Training load</h2>
+          <span class="note">rolling 7-day</span>
+        </div>
+        <div class="chart"><canvas id="load-chart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h2>Pace over time</h2>
+          <span class="note">
+            runs of 1 mi or more
+            {%- if trend %} ·
+              {% if trend.seconds_per_month > 1 -%}
+                improving {{ trend.seconds_per_month | num(0) }} sec/mi a month
+              {%- elif trend.seconds_per_month < -1 -%}
+                slowing {{ (-trend.seconds_per_month) | num(0) }} sec/mi a month
+              {%- else -%}
+                holding steady
+              {%- endif %}
+            {%- endif %}
+          </span>
+          <a class="table-link" href="/runs?sort=pace_sec_per_mi&dir=asc">table view</a>
+        </div>
+        <div class="chart"><canvas id="pace-chart"></canvas></div>
+      </div>
+    </div>
+
+    {% if upcoming %}
+    <div class="card">
+      <div class="card-head">
+        <h2>Up next</h2>
+        <span class="note">from the plan</span>
+        <a class="table-link" href="/runs?status=planned">the whole plan →</a>
+      </div>
+      <div class="table-scroll">
+        <table class="runs">
+          <tbody>
+            {% for run in upcoming %}
+              <tr>
+                <td><a href="/runs/{{ run.id }}">{{ run.date | day('%a %b %-d') }}</a></td>
+                <td>
+                  <span class="badge">
+                    <span class="dot" style="background: {{ type_slots.get(run.workout_type) and 'var(--series-' ~ type_slots[run.workout_type] ~ ')' or 'var(--muted)' }}"></span>
+                    {{ run.workout_type }}
+                  </span>
+                </td>
+                <td class="num">{{ run.distance_mi | num(2) }}</td>
+                <td class="notes">{{ run.notes or '' }}</td>
+                <td class="num"><a href="/runs/{{ run.id }}">log →</a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Recent runs</h2>
+        <a class="table-link" href="/runs">see all {{ summary.runs }} completed →</a>
+      </div>
+      <div class="table-scroll">
+        {% set rows = recent %}
+        {% include "_runs_table.html" %}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Personal bests</h2></div>
+      <div class="detail-grid">
+        <div>
+          <div class="k">Longest run</div>
+          <div class="v">{{ bests.longest_run.distance_mi | num }} mi</div>
+          <div class="k" style="text-transform:none;letter-spacing:0">
+            <a href="/runs/{{ bests.longest_run.id }}">{{ bests.longest_run.date | day('%b %-d, %Y') }}</a>
+          </div>
+        </div>
+        {% if bests.fastest_pace %}
+        <div>
+          <div class="k">Fastest pace (3 mi+)</div>
+          <div class="v">{{ bests.fastest_pace.pace_sec_per_mi | pace }}/mi</div>
+          <div class="k" style="text-transform:none;letter-spacing:0">
+            <a href="/runs/{{ bests.fastest_pace.id }}">{{ bests.fastest_pace.date | day('%b %-d, %Y') }}</a>
+          </div>
+        </div>
+        {% endif %}
+        {% if bests.biggest_week %}
+        <div>
+          <div class="k">Biggest week</div>
+          <div class="v">{{ bests.biggest_week.miles | num }} mi</div>
+          <div class="k" style="text-transform:none;letter-spacing:0">
+            week of {{ bests.biggest_week.week_start | day('%b %-d, %Y') }}
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  {% else %}
+    {% include "_empty.html" %}
+  {% endif %}
+{% endblock %}
+
+{% block scripts %}
+  {% if has_data %}
+    <script id="weekly-data" type="application/json">{{ weekly | tojson }}</script>
+    <script id="load-data" type="application/json">{{ load | tojson }}</script>
+    <script id="pace-data" type="application/json">{{ paces | tojson }}</script>
+    {% if trend %}<script id="trend-data" type="application/json">{{ trend | tojson }}</script>{% endif %}
+    <script src="{{ static_url('vendor/chart.umd.js') }}"></script>
+    <script src="{{ static_url('charts.js') }}"></script>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,52 @@
+{# Expects `rows`. Pass `sortcols` (from main.sort_links) to make the headers sortable. #}
+{% macro th(field, label, cls='') -%}
+  <th class="{{ cls }}">
+    {%- if sortcols is defined and field in sortcols -%}
+      <a href="{{ sortcols[field].url }}">{{ label }}<span class="sort-arrow">{{ sortcols[field].arrow }}</span></a>
+    {%- else -%}{{ label }}{%- endif -%}
+  </th>
+{%- endmacro %}
+<table class="runs">
+  <thead>
+    <tr>
+      {{ th('date', 'Date') }}
+      {{ th('workout_type', 'Type') }}
+      {{ th('distance_mi', 'Distance', 'num') }}
+      {{ th('duration_sec', 'Time', 'num') }}
+      {{ th('pace_sec_per_mi', 'Pace', 'num') }}
+      {% if 'avg_hr' in present %}{{ th('avg_hr', 'HR', 'num') }}{% endif %}
+      {% if 'elevation_ft' in present %}{{ th('elevation_ft', 'Elev', 'num') }}{% endif %}
+      <th>Workout</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for run in rows %}
+      <tr>
+        <td><a href="/runs/{{ run.id }}">{{ run.date | day('%a %b %-d') }}</a></td>
+        <td>
+          {% if run.workout_type %}
+            <span class="badge">
+              <span class="dot" style="background: {{ type_slots.get(run.workout_type) and 'var(--series-' ~ type_slots[run.workout_type] ~ ')' or 'var(--muted)' }}"></span>
+              {{ run.workout_type }}
+            </span>
+          {% else %}<span style="color: var(--muted)">—</span>{% endif %}
+        </td>
+        <td class="num">{{ run.distance_mi | num(2) }}</td>
+        <td class="num">{{ run.duration_sec | duration }}</td>
+        <td class="num">{{ run.pace_sec_per_mi | pace }}</td>
+        {% if 'avg_hr' in present %}<td class="num">{{ run.avg_hr or '—' }}</td>{% endif %}
+        {% if 'elevation_ft' in present %}<td class="num">{{ run.elevation_ft | num(0) }}</td>{% endif %}
+        <td class="notes">
+          {{ run.notes or '' }}
+          {%- if run.status and run.status != 'completed' %}
+            <span class="pill {{ run.status }}">{{ run.status }}</span>
+          {%- endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="{{ 6 + present | length }}" style="color: var(--text-secondary); padding: 24px 0">
+        No runs match these filters.
+      </td></tr>
+    {% endfor %}
+  </tbody>
+</table>

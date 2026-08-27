@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Runners Data{% endblock %}</title>
+  <link rel="stylesheet" href="{{ static_url('app.css') }}">
+  {% block head %}{% endblock %}
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🏃</text></svg>">
+  <script>
+    // Applied before first paint so a dark-mode reload doesn't flash white.
+    (function () {
+      var saved = localStorage.getItem("theme");
+      if (saved === "dark" || saved === "light") {
+        document.documentElement.dataset.theme = saved;
+      }
+    })();
+  </script>
+</head>
+<body>
+  <header class="site">
+    <div class="wrap">
+      <a class="brand" href="/">🏃 Runners Data</a>
+      <nav class="site">
+        <a href="/" class="{{ 'active' if request.url.path == '/' }}">Dashboard</a>
+        <a href="/runs" class="{{ 'active' if request.url.path.startswith('/runs') }}">All runs</a>
+        <a href="/api/docs">API</a>
+      </nav>
+      {% if race %}
+        <div class="countdown">
+          {% if race.past %}
+            <b>{{ race.name }}</b> was {{ -race.days }} days ago
+          {% else %}
+            <b>{{ race.days }} days</b> to {{ race.name }} · {{ race.weeks }} weeks
+          {% endif %}
+        </div>
+      {% endif %}
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch theme">
+        theme
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    {% block body %}{% endblock %}
+  </main>
+
+  <script>
+    document.getElementById("theme-toggle").addEventListener("click", function () {
+      var root = document.documentElement;
+      var systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      var current = root.dataset.theme || (systemDark ? "dark" : "light");
+      var next = current === "dark" ? "light" : "dark";
+      root.dataset.theme = next;
+      localStorage.setItem("theme", next);
+      document.dispatchEvent(new Event("themechange"));
+    });
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

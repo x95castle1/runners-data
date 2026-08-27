@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Not found · Runners Data{% endblock %}
+{% block body %}
+  <h1>No run #{{ run_id }}</h1>
+  <p class="sub">That run isn't in the database. It may have been dropped on a re-import.</p>
+  <p><a class="btn" href="/runs">Back to all runs</a></p>
+{% endblock %}

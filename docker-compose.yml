@@ -1,0 +1,22 @@
+services:
+  web:
+    build: .
+    container_name: runners-data
+    ports:
+      - "8000:8000"
+    volumes:
+      # Data lives on the host so re-ingesting never needs an image rebuild.
+      - ./data:/srv/data
+      - ./config:/srv/config
+      # Live-reload the app code during development.
+      - ./app:/srv/app
+      - ./ingest:/srv/ingest
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      RUNS_DB: /srv/data/runs.db
+      # Without this the container runs UTC and the race countdown is a day off.
+      TZ: ${TZ:-UTC}
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped

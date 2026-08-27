@@ -1,0 +1,555 @@
+/* Palette roles. Light is the base; dark is re-declared under both the OS
+   media query and the [data-theme] stamp so the toggle wins in both directions. */
+:root {
+  color-scheme: light;
+  --page:           #f9f9f7;
+  --surface-1:      #fcfcfb;
+  --text-primary:   #0b0b0b;
+  --text-secondary: #52514e;
+  --muted:          #898781;
+  --grid:           #e1e0d9;
+  --axis:           #c3c2b7;
+  --border:         rgba(11, 11, 11, 0.10);
+  --hover:          rgba(11, 11, 11, 0.04);
+  --series-1:       #2a78d6;
+  --series-2:       #eb6834;
+  --series-3:       #1baf7a;
+  --series-4:       #eda100;
+  --series-5:       #e87ba4;
+  --good:           #006300;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page:           #0d0d0d;
+    --surface-1:      #1a1a19;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --muted:          #898781;
+    --grid:           #2c2c2a;
+    --axis:           #383835;
+    --border:         rgba(255, 255, 255, 0.10);
+    --hover:          rgba(255, 255, 255, 0.06);
+    --series-1:       #3987e5;
+    --series-2:       #d95926;
+    --series-3:       #199e70;
+    --series-4:       #c98500;
+    --series-5:       #d55181;
+    --good:           #0ca30c;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page:           #0d0d0d;
+  --surface-1:      #1a1a19;
+  --text-primary:   #ffffff;
+  --text-secondary: #c3c2b7;
+  --muted:          #898781;
+  --grid:           #2c2c2a;
+  --axis:           #383835;
+  --border:         rgba(255, 255, 255, 0.10);
+  --hover:          rgba(255, 255, 255, 0.06);
+  --series-1:       #3987e5;
+  --series-2:       #d95926;
+  --series-3:       #199e70;
+  --series-4:       #c98500;
+  --series-5:       #d55181;
+  --good:           #0ca30c;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--text-primary);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--series-1); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px 64px; }
+
+/* --- header ------------------------------------------------------------- */
+
+header.site {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-1);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+header.site .wrap {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+.brand { font-weight: 650; letter-spacing: -0.01em; color: var(--text-primary); }
+.brand:hover { text-decoration: none; }
+nav.site { display: flex; gap: 18px; margin-right: auto; }
+nav.site a { color: var(--text-secondary); font-size: 14px; }
+nav.site a.active { color: var(--text-primary); font-weight: 600; }
+
+.countdown {
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.countdown b { color: var(--text-primary); font-weight: 650; }
+
+.theme-toggle {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 10px;
+}
+.theme-toggle:hover { background: var(--hover); }
+
+/* --- headings ----------------------------------------------------------- */
+
+h1 { font-size: 26px; letter-spacing: -0.02em; margin: 32px 0 4px; }
+h2 { font-size: 16px; letter-spacing: -0.01em; margin: 0; font-weight: 650; }
+.sub { color: var(--text-secondary); font-size: 14px; margin: 0 0 24px; }
+
+/* --- stat tiles --------------------------------------------------------- */
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.tile {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+.tile .label {
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.tile .value {
+  font-size: 28px;
+  font-weight: 620;
+  letter-spacing: -0.02em;
+  margin-top: 2px;
+  line-height: 1.15;
+}
+.tile .value .unit {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-left: 3px;
+}
+.tile .foot { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.tile .foot .up { color: var(--good); }
+
+/* --- cards & charts ----------------------------------------------------- */
+
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 20px 20px;
+  margin-bottom: 20px;
+}
+.card-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;          /* a long note wraps as a whole rather than
+                               splitting the title and the link mid-word */
+  gap: 4px 12px;
+  margin-bottom: 16px;
+}
+.card-head h2 { white-space: nowrap; }
+.card-head .note {
+  color: var(--text-secondary);
+  font-size: 13px;
+  min-width: 0;
+}
+.card-head .table-link {
+  margin-left: auto;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* Sized to include the x-axis band so the card never gets a nested scrollbar. */
+.chart { position: relative; height: 260px; }
+.chart.tall { height: 300px; }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 860px) { .grid-2 { grid-template-columns: 1fr; } }
+
+/* --- table -------------------------------------------------------------- */
+
+.table-scroll { overflow-x: auto; }
+table.runs {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+}
+table.runs th {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  padding: 8px 12px 8px 0;
+  border-bottom: 1px solid var(--axis);
+  white-space: nowrap;
+}
+table.runs th a { color: inherit; }
+table.runs th.num, table.runs td.num { text-align: right; padding-right: 20px; }
+table.runs td {
+  padding: 9px 12px 9px 0;
+  border-bottom: 1px solid var(--grid);
+  white-space: nowrap;
+}
+table.runs td.notes {
+  white-space: normal;
+  color: var(--text-secondary);
+  min-width: 200px;
+}
+table.runs tbody tr:hover { background: var(--hover); }
+.sort-arrow { color: var(--muted); }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.badge .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--series-1);
+  flex: none;
+}
+
+/* --- filters ------------------------------------------------------------ */
+
+form.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+form.filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+form.filters input, form.filters select {
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: var(--page);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 9px;
+  min-height: 34px;
+}
+form.filters .actions { display: flex; gap: 8px; margin-left: auto; }
+.btn {
+  font: inherit;
+  font-size: 14px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text-primary);
+  cursor: pointer;
+  min-height: 34px;
+}
+.btn.primary { background: var(--series-1); border-color: var(--series-1); color: #fff; }
+.btn:hover { filter: brightness(0.97); text-decoration: none; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+.chip {
+  font-size: 13px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+.chip.on { background: var(--text-primary); border-color: var(--text-primary); color: var(--page); }
+.chip:hover { text-decoration: none; background: var(--hover); }
+.chip.on:hover { background: var(--text-primary); }
+
+/* --- run detail --------------------------------------------------------- */
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 1px;
+  /* Surface, not the divider colour: a part-filled last row would otherwise
+     leave a grey block where the missing cells would be. */
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.detail-grid div {
+  background: var(--surface-1);
+  padding: 14px 16px;
+  box-shadow: 0 0 0 1px var(--grid);   /* draws the divider only around real cells */
+}
+.detail-grid .k {
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.detail-grid .v { font-size: 20px; font-weight: 600; margin-top: 2px; }
+
+.pager { display: flex; gap: 14px; font-size: 14px; margin-top: 20px; }
+
+/* --- empty state -------------------------------------------------------- */
+
+.empty {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 32px;
+  margin-top: 24px;
+}
+.empty h2 { margin-bottom: 8px; }
+.empty ol { color: var(--text-secondary); line-height: 1.9; padding-left: 20px; }
+.empty code {
+  background: var(--page);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 13px;
+}
+
+/* Status of a run that isn't a completed one: planned, or on the plan and missed. */
+.pill {
+  display: inline-block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  vertical-align: 1px;
+}
+.pill.skipped { color: var(--series-2); border-color: var(--series-2); }
+
+/* --- logging a run ------------------------------------------------------- */
+
+.notice {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--good);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 0 0 20px;
+  font-size: 14px;
+}
+.notice.error { border-left-color: var(--series-2); color: var(--text-primary); }
+
+.log-card { margin-top: 20px; }
+
+.log-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+}
+.log-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+.log-form label.grow { flex: 1; min-width: 200px; }
+.log-form input {
+  font: inherit;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  background: var(--page);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  min-height: 38px;
+  width: 100%;
+}
+.log-form input:focus {
+  outline: 2px solid var(--series-1);
+  outline-offset: -1px;
+  border-color: var(--series-1);
+}
+.log-form .hint {
+  font-size: 11px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+.log-actions { display: flex; gap: 8px; align-self: center; padding-top: 12px; }
+
+/* --- route map ----------------------------------------------------------- */
+
+#route-map {
+  height: 380px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--page);
+  z-index: 0;               /* keep Leaflet panes under the sticky header */
+}
+#route-map .leaflet-control-attribution {
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+#route-map .leaflet-control-attribution a { color: var(--series-1); }
+
+/* OpenStreetMap only ships light tiles. Inverting and rotating the hue back is
+   the standard way to get a dark basemap out of them; the route line sits above
+   the filtered layer so its colour is untouched. */
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) #route-map .leaflet-tile-pane {
+    filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9);
+  }
+}
+:root[data-theme="dark"] #route-map .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9);
+}
+
+/* --- split pace against the run's average -------------------------------- */
+
+td.dev { width: 32%; min-width: 200px; padding-right: 0; }
+
+.dev-row { display: flex; align-items: center; gap: 10px; }
+
+.dev-track { position: relative; flex: 1; height: 8px; }
+.dev-track::before {           /* the average, and the zero line for the bars */
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -4px;
+  height: 16px;
+  width: 1px;
+  background: var(--text-secondary);
+  opacity: 0.45;
+}
+
+.dev-bar { position: absolute; top: 0; height: 8px; }
+.dev-bar.slow { left: 50%; background: var(--series-2); border-radius: 0 4px 4px 0; }
+.dev-bar.fast { right: 50%; background: var(--series-3); border-radius: 4px 0 0 4px; }
+/* A flat outer end means the mile ran past the scale; its number still shows. */
+.dev-bar.clamped { border-radius: 0; }
+
+.dev-label {
+  width: 46px;
+  text-align: right;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+/* Net climb over a split, drawn at its grade. */
+.elev-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  white-space: nowrap;
+}
+.elev-cell .slope { flex: none; overflow: visible; }
+
+
+/* --- run header stats ---------------------------------------------------- */
+
+/* Four tiles that divide their row exactly, rather than eight that leave seven
+   empty cells trailing across a second row. */
+.stat-primary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+/* Square off the join only when the secondary strip is actually there -- a run
+   with nothing else measured would otherwise end on a flat, unfinished edge. */
+.stat-primary:has(+ .stat-secondary) { border-radius: 12px 12px 0 0; }
+.stat-primary .stat {
+  background: var(--surface-1);
+  padding: 16px 18px 18px;
+  box-shadow: 0 0 0 1px var(--grid);
+}
+.stat-primary .k {
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.stat-primary .v {
+  font-size: 30px;
+  font-weight: 620;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin-top: 4px;
+  white-space: nowrap;
+}
+.stat-primary .v .u {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-left: 4px;
+}
+
+/* Everything measured but secondary, on one line that wraps instead of a grid
+   that has to be padded out. */
+.stat-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  padding: 12px 18px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-top: 0;
+  border-radius: 0 0 12px 12px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+.stat-secondary b {
+  color: var(--text-primary);
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,9 @@
+{
+  "_comment": "Copy to config/columns.json only if `make inspect` maps a column wrong. Keys are canonical fields; values are the EXACT header text from your sheet. Use \"\" to unmap a field the matcher grabbed by mistake.",
+  "date": "Date",
+  "distance_mi": "Distance (mi)",
+  "duration_sec": "Duration",
+  "pace_sec_per_mi": "Avg Pace",
+  "workout_type": "Workout Type",
+  "notes": "Notes"
+}

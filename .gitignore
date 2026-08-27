@@ -1,0 +1,11 @@
+data/*.csv
+data/*.db
+data/*.zip
+data/*.xml
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.DS_Store

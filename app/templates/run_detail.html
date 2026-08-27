@@ -1,0 +1,304 @@
+{% extends "base.html" %}
+{% block title %}{{ run.date }} · Runners Data{% endblock %}
+
+{% block body %}
+  <h1>{{ run.date | day('%A, %B %-d, %Y') }}</h1>
+  <p class="sub">
+    {% if run.workout_type %}
+      <span class="badge">
+        <span class="dot" style="background: {{ type_slots.get(run.workout_type) and 'var(--series-' ~ type_slots[run.workout_type] ~ ')' or 'var(--muted)' }}"></span>
+        {{ run.workout_type }}
+      </span> ·
+    {% endif %}
+    {% if run.measured_source == 'apple-health' %}measured by Apple Health
+    {%- elif run.logged_at %}logged here
+    {%- else %}from {{ run.source | source }}{% endif %}
+    {%- if run.prior_distance_mi and run.prior_distance_mi != run.distance_mi %}
+      · plan called for {{ run.prior_distance_mi | num(1) }} mi
+    {%- endif %}
+  </p>
+
+  {% if error %}
+    <div class="notice error">{{ error }}</div>
+  {% elif logged == 'skipped' %}
+    <div class="notice">Marked as not run.</div>
+  {% elif logged == 'cleared' %}
+    <div class="notice">Cleared — back on the plan.</div>
+  {% elif logged %}
+    <div class="notice">Logged. Nice work.</div>
+  {% endif %}
+
+  {# The four numbers you look for first, sized to fill their row exactly.
+     Everything else rides in a strip underneath rather than leaving most of a
+     second row empty. #}
+  <div class="stat-primary">
+    <div class="stat">
+      <div class="k">Distance</div>
+      <div class="v">{{ run.distance_mi | num(2) }}<span class="u">mi</span></div>
+    </div>
+    <div class="stat">
+      <div class="k">Time</div>
+      <div class="v">{{ run.duration_sec | duration }}</div>
+    </div>
+    <div class="stat">
+      <div class="k">Pace</div>
+      <div class="v">{{ run.pace_sec_per_mi | pace }}<span class="u">/mi</span></div>
+    </div>
+    {% if run.avg_hr %}
+      <div class="stat">
+        <div class="k">Avg heart rate</div>
+        <div class="v">{{ run.avg_hr }}<span class="u">bpm</span></div>
+      </div>
+    {% endif %}
+  </div>
+
+  {% set extras = [] %}
+  {% if run.max_hr %}{% set _ = extras.append((run.max_hr, 'bpm max')) %}{% endif %}
+  {% if run.min_hr %}{% set _ = extras.append((run.min_hr, 'bpm low')) %}{% endif %}
+  {% if run.elevation_ft %}{% set _ = extras.append((run.elevation_ft | num(0), 'ft climbed')) %}{% endif %}
+  {% if run.cadence %}{% set _ = extras.append((run.cadence, 'spm cadence')) %}{% endif %}
+  {% if run.calories %}{% set _ = extras.append((run.calories | num(0), 'calories')) %}{% endif %}
+  {% if run.temperature_f %}{% set _ = extras.append((run.temperature_f | num(0) ~ '°F', 'at the start')) %}{% endif %}
+  {% if run.humidity_pct %}{% set _ = extras.append((run.humidity_pct | num(0) ~ '%', 'humidity')) %}{% endif %}
+  {% if run.effort %}{% set _ = extras.append((run.effort, 'effort')) %}{% endif %}
+  {% if extras %}
+    <div class="stat-secondary">
+      {% for value, label in extras %}
+        <span><b>{{ value }}</b> {{ label }}</span>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if hr %}
+    <div class="card" style="margin-top:20px">
+      <div class="card-head">
+        <h2>Heart rate</h2>
+        <span class="note">
+          {{ hr | length }} samples · {{ run.min_hr }}–{{ run.max_hr }} bpm,
+          averaging {{ run.avg_hr }}
+        </span>
+      </div>
+      <div class="chart"><canvas id="hr-chart"></canvas></div>
+    </div>
+  {% elif run.avg_hr %}
+    <div class="card" style="margin-top:20px">
+      <div class="card-head">
+        <h2>Heart rate</h2>
+        <span class="note">summary only</span>
+      </div>
+      <div class="detail-grid">
+        {% if run.min_hr %}<div><div class="k">Low</div><div class="v">{{ run.min_hr }} bpm</div></div>{% endif %}
+        <div><div class="k">Average</div><div class="v">{{ run.avg_hr }} bpm</div></div>
+        {% if run.max_hr %}<div><div class="k">Max</div><div class="v">{{ run.max_hr }} bpm</div></div>{% endif %}
+      </div>
+      <p class="sub" style="margin:12px 0 0">
+        No trace to plot: Apple Health keeps second-by-second heart rate for recent
+        workouts and thins older ones down to these figures
+        {%- if hr_sparse %} plus a few scattered readings{% endif %}.
+      </p>
+    </div>
+  {% endif %}
+
+  {% if splits %}
+    <div class="card">
+      <div class="card-head">
+        <h2>Splits</h2>
+        <span class="note">
+          from the GPS track
+          {%- if weather_range %} · felt like
+            {{ weather_range.low | num(0) }}–{{ weather_range.high | num(0) }}°F,
+            {{ weather_range.humidity | num(0) }}% humidity{% endif %}
+        </span>
+      </div>
+      <div class="table-scroll">
+        <table class="runs">
+          <thead>
+            <tr><th>Mile</th><th class="num">Time</th>
+                {% if split_hr %}<th class="num">HR</th>{% endif %}
+                {% if split_weather %}
+                  <th class="num">Feels</th><th class="num">Humidity</th>
+                  <th class="num">Wind</th>
+                {% endif %}
+                <th class="num">Elevation</th>
+                <th class="dev-head">
+                  {%- if average_pace %}vs {{ average_pace | pace }} average{% endif -%}
+                </th></tr>
+          </thead>
+          <tbody>
+            {% for split in splits %}
+              <tr>
+                <td>{{ split.mile if split.mile else 'final ' ~ split.partial }}</td>
+                <td class="num">
+                  {{ split.seconds | duration }}
+                  {%- if not split.mile %}
+                    {# a part-mile's time says nothing on its own #}
+                    <span style="color: var(--muted)">({{ split.pace_sec_per_mi | pace }}/mi)</span>
+                  {%- endif %}
+                </td>
+                {% if split_hr %}
+                  <td class="num">{{ split.avg_hr or '—' }}</td>
+                {% endif %}
+                {% if split_weather %}
+                  <td class="num">{{ split.apparent_f | num(0) }}°</td>
+                  <td class="num">{{ split.humidity_pct | num(0) }}%</td>
+                  <td class="num">
+                    {%- if split.headwind_mph is defined and split.headwind_mph is not none -%}
+                      {% set head = split.headwind_mph > 0 %}
+                      {# colour reinforces, the word carries the meaning #}
+                      <span style="color: {{ 'var(--series-2)' if head else 'var(--series-3)' }}">
+                        {{ split.headwind_mph | abs | num(1) }} {{ 'head' if head else 'tail' }}
+                      </span>
+                    {%- else -%}—{%- endif -%}
+                  </td>
+                {% endif %}
+                <td class="num">
+                  {%- if split.elevation_change_ft is defined and split.elevation_change_ft is not none -%}
+                    {% set change = split.elevation_change_ft %}
+                    {% set frac = [[change / elev_scale, 1] | min, -1] | max %}
+                    {# flat-ish miles stay grey; the tilt carries the magnitude #}
+                    {% set notable = (change | abs) > (elev_scale * 0.15) %}
+                    {% set stroke = 'var(--muted)' if not notable
+                       else ('var(--series-2)' if change > 0 else 'var(--series-3)') %}
+                    <span class="elev-cell">
+                      <svg class="slope" width="30" height="14" viewBox="0 0 30 14"
+                           aria-hidden="true">
+                        <line x1="2" y1="{{ (7 + 5 * frac) | round(2) }}"
+                              x2="28" y2="{{ (7 - 5 * frac) | round(2) }}"
+                              stroke="{{ stroke }}" stroke-width="2"
+                              stroke-linecap="round"/>
+                      </svg>
+                      <span>{{ '+' if change > 0 }}{{ change }} ft</span>
+                    </span>
+                  {%- else -%}—{%- endif -%}
+                </td>
+                <td class="dev">
+                  {%- if split.deviation_sec is defined and split.deviation_sec is not none -%}
+                    {% set gap = split.deviation_sec %}
+                    {% set frac = [(gap | abs) / split_scale, 1] | min %}
+                    {% set slow = gap > 0 %}
+                    <span class="dev-row">
+                      <span class="dev-track">
+                        <span class="dev-bar {{ 'slow' if slow else 'fast' }}
+                                     {{ 'clamped' if frac >= 1 }}"
+                              style="width: {{ (frac * 50) | round(2) }}%"></span>
+                      </span>
+                      <span class="dev-label">{{ gap | signed }}</span>
+                    </span>
+                  {%- endif -%}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if track %}
+    <div class="card">
+      <div class="card-head">
+        <h2>Route</h2>
+        <span class="note">{{ run.route_points }} GPS points</span>
+      </div>
+      <div id="route-map"></div>
+      <p class="sub" style="margin:8px 0 0;font-size:12px">
+        <span style="color:var(--series-3)">●</span> start
+        <span style="color:var(--series-2);margin-left:10px">●</span> finish
+      </p>
+    </div>
+  {% endif %}
+
+  <div class="card log-card">
+    <div class="card-head">
+      <h2>{{ 'Edit this run' if run.status == 'completed' else 'Log this run' }}</h2>
+      {% if run.measured_source == 'apple-health' %}
+        <span class="note">measured by your watch — editing replaces those numbers</span>
+      {% elif run.logged_at %}
+        <span class="note">entered here, not from the spreadsheet</span>
+      {% elif run.status == 'completed' %}
+        <span class="note">from the spreadsheet</span>
+      {% endif %}
+    </div>
+    <form method="post" action="/runs/{{ run.id }}/log" class="log-form">
+      <label>Time
+        <input type="text" name="duration" inputmode="numeric"
+               placeholder="48:12"
+               value="{{ run.duration_sec | duration if run.duration_sec else '' }}">
+        <span class="hint">48:12, 1:02:30, or 48 for minutes</span>
+      </label>
+      <label>Distance
+        <input type="text" name="distance" inputmode="decimal"
+               value="{{ run.distance_mi | num(2) if run.distance_mi else '' }}">
+        <span class="hint">miles — leave as-is if you ran the plan</span>
+      </label>
+      <label class="grow">Workout
+        <input type="text" name="notes" value="{{ run.notes or '' }}">
+        <span class="hint">what it was, or how it went</span>
+      </label>
+      <div class="log-actions">
+        <button class="btn primary" type="submit" name="action" value="log">
+          {{ 'Save' if run.status == 'completed' else 'Log it' }}
+        </button>
+        {% if run.status == 'planned' %}
+          <button class="btn" type="submit" name="action" value="skip"
+                  formnovalidate>Didn't run</button>
+        {% elif run.logged_at %}
+          <button class="btn" type="submit" name="action" value="unlog"
+                  formnovalidate>Undo</button>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+
+  {% if run.route or run.weather or run.shoes %}
+    <div class="card" style="margin-top:20px">
+      <div class="card-head"><h2>Details</h2></div>
+      <p class="sub" style="margin:0">
+        {%- if run.route %}Route: {{ run.route }}{% endif %}
+        {%- if run.weather %}{% if run.route %} · {% endif %}Weather: {{ run.weather }}{% endif %}
+        {%- if run.shoes %}{% if run.route or run.weather %} · {% endif %}Shoes: {{ run.shoes }}{% endif %}
+      </p>
+    </div>
+  {% endif %}
+
+  {% if extra %}
+    <div class="card">
+      <div class="card-head">
+        <h2>From the spreadsheet</h2>
+        <span class="note">columns carried over as-is</span>
+      </div>
+      <div class="table-scroll">
+        <table class="runs">
+          <tbody>
+            {% for key, value in extra.items() %}
+              <tr><td style="color: var(--text-secondary)">{{ key }}</td><td>{{ value }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="pager">
+    {% if prev_id %}<a href="/runs/{{ prev_id }}">← previous run</a>{% endif %}
+    <a href="/runs">all runs</a>
+    {% if next_id %}<a href="/runs/{{ next_id }}">next run →</a>{% endif %}
+  </div>
+{% endblock %}
+
+{% block head %}
+  {% if track %}<link rel="stylesheet" href="{{ static_url('vendor/leaflet/leaflet.css') }}">{% endif %}
+{% endblock %}
+
+{% block scripts %}
+  {% if hr %}
+    <script id="hr-data" type="application/json">{{ hr | tojson }}</script>
+    <script src="{{ static_url('vendor/chart.umd.js') }}"></script>
+    <script src="{{ static_url('charts.js') }}"></script>
+  {% endif %}
+  {% if track %}
+    <script id="route-data" type="application/json">{{ track | tojson }}</script>
+    <script src="{{ static_url('vendor/leaflet/leaflet.js') }}"></script>
+    <script src="{{ static_url('map.js') }}"></script>
+  {% endif %}
+{% endblock %}
