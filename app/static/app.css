@@ -633,7 +633,17 @@ td.dev { width: 32%; min-width: 200px; padding-right: 0; }
   margin-right: 7px;
   flex: none;
 }
-/* The one exception to the single grey. A heart is red everywhere, so a grey one
-   reads as a mistake rather than as restraint -- and it matches the heart on the
-   run pages. Every other icon stays neutral so this stays the exception. */
-.tile .value .icon-heart { color: var(--heart); }
+/* Each icon takes the colour its own chart uses further down the page, so the
+   pairing is learnable rather than arbitrary: steps aqua like the weekly steps
+   bars, calories orange like the calorie bars, distance blue like weekly
+   mileage. Decorative only -- every tile is labelled, and nothing here is the
+   sole carrier of meaning. */
+.tile .value .icon-ring      { color: var(--series-1); }  /* weekly miles */
+.tile .value .icon-road      { color: var(--series-1); }  /* weekly mileage bars */
+.tile .value .icon-peak      { color: var(--series-3); }
+.tile .value .icon-stopwatch { color: var(--series-5); }
+.tile .value .icon-hourglass { color: var(--series-4); }
+.tile .value .icon-steps     { color: var(--series-3); }  /* weekly steps bars */
+.tile .value .icon-flame     { color: var(--series-2); }  /* weekly calorie bars */
+.tile .value .icon-heart     { color: var(--heart); }
+.tile .value .icon-lungs     { color: var(--series-1); }  /* VO2 max dots */
