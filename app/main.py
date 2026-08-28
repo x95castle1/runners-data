@@ -227,6 +227,37 @@ OPTIONAL_COLUMNS = ["avg_hr", "elevation_ft"]
 # here -- they get the summary treatment instead of an empty chart.
 MIN_HR_SAMPLES = 20
 
+# Reference points for the tile equivalences. Gathered here so the arithmetic is
+# visible and arguable rather than buried in a template.
+WILLIS_TOWER_STEPS = 2109   # to the 103rd floor, the SkyRise Chicago climb
+PIZZA_SLICE_CAL = 285
+RESTING_HR = 54             # this runner's 2026 median, from the Health export
+POUNDS_PER_KG = 0.45359
+
+
+def tile_facts(conn, summary: dict, beats: dict, vo2: dict | None) -> dict:
+    """Human-scale equivalents for the running totals.
+
+    Each is a (figure, wording) pair so the number can carry the emphasis while
+    the units stay quiet.
+    """
+    facts = {}
+    if summary.get("steps"):
+        facts["steps"] = (f"{summary['steps'] / WILLIS_TOWER_STEPS:,.0f}",
+                          "climbs of Willis Tower")
+    if summary.get("calories"):
+        facts["calories"] = (f"{summary['calories'] / PIZZA_SLICE_CAL:,.0f}",
+                             "slices of pizza")
+    if beats and beats.get("beats"):
+        days = beats["beats"] / (RESTING_HR * 60 * 24)
+        facts["beats"] = (f"{days:.0f}", "days of resting beats")
+    weight = stats.latest_weight_lb(conn)
+    if vo2 and weight:
+        # mL/min/kg x kg -> litres of oxygen a minute at maximum effort.
+        litres = vo2["latest"] * weight * POUNDS_PER_KG / 1000
+        facts["vo2"] = (f"{litres:.1f} L", "of oxygen a minute")
+    return facts
+
 
 def hr_zone_bounds() -> tuple[int, ...]:
     """Lower edge of zones 2-5, overridable with HR_ZONES in .env.
@@ -270,7 +301,11 @@ def dashboard(request: Request, scope: str = "block"):
         block_start = stats.training_block_start(conn)
         since = block_start if (scope != "all" and block_start) else None
         context = base_context(request, conn)
+        block_summary = stats.summary(conn, since)
+        block_beats = stats.total_heartbeats(conn, since)
+        block_vo2 = stats.vo2_summary(conn, since=since)
         context.update(
+            facts=tile_facts(conn, block_summary, block_beats, block_vo2),
             scope=scope,
             block_start=block_start,
             has_older=stats.has_runs_before(conn, block_start) if block_start else False,
@@ -284,6 +319,7 @@ def dashboard(request: Request, scope: str = "block"):
             vo2=stats.vo2_series(conn, since=since),
             zone_totals=stats.zone_totals(conn, since, hr_zone_bounds()),
             beats=stats.total_heartbeats(conn, since),
+
             zone_runs=stats.summary(conn, since)["runs"],
             vo2_summary=stats.vo2_summary(conn, since=since),
             bests=stats.personal_bests(conn, since),

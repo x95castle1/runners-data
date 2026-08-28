@@ -76,6 +76,12 @@
         <div class="label">Steps</div>
         <div class="value">{{ icon("steps") }}{{ summary.steps | millions }}</div>
         <div class="foot">{{ "{:,}".format(summary.steps) }} in total</div>
+        {% if facts.steps %}
+          <div class="tile-fact">
+            <b>{{ facts.steps[0] }}</b>
+            <span>{{ facts.steps[1] }}</span>
+          </div>
+        {% endif %}
       </div>
       {% endif %}
       {% if summary.calories %}
@@ -83,6 +89,12 @@
         <div class="label">Calories</div>
         <div class="value">{{ icon("flame") }}{{ summary.calories | millions }}</div>
         <div class="foot">burned running</div>
+        {% if facts.calories %}
+          <div class="tile-fact">
+            <b>{{ facts.calories[0] }}</b>
+            <span>{{ facts.calories[1] }}</span>
+          </div>
+        {% endif %}
       </div>
       {% endif %}
       {% if beats and beats.beats %}
@@ -90,6 +102,12 @@
         <div class="label">Heartbeats</div>
         <div class="value">{{ icon("heart") }}{{ beats.beats | millions }}</div>
         <div class="foot">running, across {{ beats.runs }} runs</div>
+        {% if facts.beats %}
+          <div class="tile-fact">
+            <b>{{ facts.beats[0] }}</b>
+            <span>{{ facts.beats[1] }}</span>
+          </div>
+        {% endif %}
       </div>
       {% endif %}
       {% if vo2_summary %}
@@ -106,6 +124,12 @@
             peak {{ vo2_summary.best | num(1) }} on {{ vo2_summary.best_date | day('%b %-d') }}
           {% endif %}
         </div>
+        {% if facts.vo2 %}
+          <div class="tile-fact">
+            <b>{{ facts.vo2[0] }}</b>
+            <span>{{ facts.vo2[1] }}</span>
+          </div>
+        {% endif %}
       </div>
       {% endif %}
     </div>

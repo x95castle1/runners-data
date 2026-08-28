@@ -532,6 +532,14 @@ def conditions_span(conn: sqlite3.Connection, run: dict) -> dict | None:
     }
 
 
+def latest_weight_lb(conn: sqlite3.Connection) -> float | None:
+    """The most recent body weight the spreadsheet recorded."""
+    row = conn.execute(
+        "SELECT weight_lb FROM weeks WHERE weight_lb IS NOT NULL"
+        " ORDER BY week_start DESC LIMIT 1").fetchone()
+    return row["weight_lb"] if row else None
+
+
 def heartbeats(avg_hr, duration_sec) -> int | None:
     """Beats over a run: average heart rate times how long it lasted.
 
