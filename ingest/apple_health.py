@@ -38,6 +38,16 @@ STAT_HEART_RATE = "HKQuantityTypeIdentifierHeartRate"
 STAT_ENERGY = "HKQuantityTypeIdentifierActiveEnergyBurned"
 STAT_STEPS = "HKQuantityTypeIdentifierStepCount"
 RECORD_HEART_RATE = STAT_HEART_RATE
+RECORD_VO2_MAX = "HKQuantityTypeIdentifierVO2Max"
+RECORD_STEPS = "HKQuantityTypeIdentifierStepCount"
+
+# Steps are bucketed to the minute. The raw records land every two or three
+# seconds, where a single step either way swings the implied rate by thirty.
+CADENCE_BUCKET_SEC = 60
+
+# Day-level metrics worth keeping. The workout pass already walks every element,
+# so these cost nothing extra to collect.
+DAILY_METRICS = {RECORD_VO2_MAX: "vo2_max"}
 
 M_PER_S_TO_MPH = 2.2369362920544
 
@@ -47,6 +57,7 @@ class HealthResult:
     workouts: list[dict] = field(default_factory=list)
     duplicates: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    metrics: list[dict] = field(default_factory=list)
     seen: int = 0                    # running workouts before de-duplication
     routes_found: int = 0
     hr_series_found: int = 0
@@ -96,10 +107,21 @@ def _stream(source):
             root.clear()
 
 
-def _read_workouts(stream) -> tuple[list[dict], list[str]]:
-    """Pass one: every running workout, with its statistics and route reference."""
-    workouts, warnings = [], []
+def _read_workouts(stream) -> tuple[list[dict], list[str], list[dict]]:
+    """Pass one: running workouts, plus the day-level metrics riding alongside."""
+    workouts, warnings, metrics = [], [], []
     for element in _stream(stream):
+        if tag_of(element) == "Record":
+            metric = DAILY_METRICS.get(element.get("type"))
+            value = nz.parse_number(element.get("value"))
+            stamp = element.get("startDate")
+            if metric and value is not None and stamp:
+                metrics.append({
+                    "metric": metric, "recorded_at": stamp, "date": stamp[:10],
+                    "value": value, "unit": element.get("unit"),
+                    "source_name": element.get("sourceName"),
+                })
+            continue
         if tag_of(element) != "Workout":
             continue
         if element.get("workoutActivityType") != RUNNING:
@@ -123,7 +145,7 @@ def _read_workouts(stream) -> tuple[list[dict], list[str]]:
             "elevation_ft": None, "temperature_f": None, "humidity_pct": None,
             "cadence": None,
             "route_file": None,
-            "hr_samples": [], "route": [],
+            "hr_samples": [], "route": [], "pauses": [], "step_buckets": {}, "steps": None,
         }
 
         duration = nz.parse_number(element.get("duration"))
@@ -143,6 +165,7 @@ def _read_workouts(stream) -> tuple[list[dict], list[str]]:
                 element.get("totalEnergyBurned"), element.get("totalEnergyBurnedUnit"), to="kcal")
 
         steps = None
+        events: list[tuple] = []
         for child in element:
             name = tag_of(child)
             if name == "WorkoutStatistics":
@@ -157,6 +180,7 @@ def _read_workouts(stream) -> tuple[list[dict], list[str]]:
                     workout["calories"] = nz.parse_hk_quantity(child.get("sum"), unit, to="kcal")
                 elif kind == STAT_STEPS and child.get("sum"):
                     steps = nz.parse_number(child.get("sum"))
+                    workout["steps"] = round(steps) if steps else None
             elif name == "MetadataEntry":
                 key, value = child.get("key"), child.get("value")
                 if key == "HKWeatherTemperature":
@@ -168,10 +192,33 @@ def _read_workouts(stream) -> tuple[list[dict], list[str]]:
                         workout["humidity_pct"] = humidity / 100 if humidity > 100 else humidity
                 elif key == "HKElevationAscended":
                     workout["elevation_ft"] = metadata_quantity(value, to="ft")
+            elif name == "WorkoutEvent":
+                # Explicit pauses only. MotionPaused is the watch's auto-detect
+                # and does not come out of Apple's duration figure.
+                kind = child.get("type")
+                if kind in ("HKWorkoutEventTypePause", "HKWorkoutEventTypeResume"):
+                    moment = nz.parse_hk_datetime(child.get("date"))
+                    if moment is not None:
+                        events.append((moment, kind.endswith("Pause")))
             elif name == "WorkoutRoute":
                 for reference in child:
                     if tag_of(reference) == "FileReference" and reference.get("path"):
                         workout["route_file"] = reference.get("path").lstrip("/")
+
+        # Pair pause with the resume that follows it; an unclosed pause runs to
+        # the end of the workout.
+        events.sort()
+        opened = None
+        for moment, is_pause in events:
+            offset = int((moment - started).total_seconds())
+            if is_pause and opened is None:
+                opened = offset
+            elif not is_pause and opened is not None:
+                if offset > opened:
+                    workout["pauses"].append((opened, offset))
+                opened = None
+        if opened is not None and ended is not None:
+            workout["pauses"].append((opened, int((ended - started).total_seconds())))
 
         if steps and workout["duration_sec"]:
             workout["cadence"] = int(round(steps / (workout["duration_sec"] / 60)))
@@ -181,7 +228,7 @@ def _read_workouts(stream) -> tuple[list[dict], list[str]]:
             workout["health_id"] = f"start:{started.isoformat()}"
 
         workouts.append(workout)
-    return workouts, warnings
+    return workouts, warnings, metrics
 
 
 def _attach_hr_series(stream, workouts: list[dict]) -> int:
@@ -207,11 +254,37 @@ def _attach_hr_series(stream, workouts: list[dict]) -> int:
     for element in _stream(stream):
         if tag_of(element) != "Record":
             continue
-        if element.get("type") != RECORD_HEART_RATE:
+        kind = element.get("type")
+        if kind not in (RECORD_HEART_RATE, RECORD_STEPS):
             continue
         moment = nz.parse_hk_datetime(element.get("startDate"))
+        if moment is None or not (earliest <= moment <= latest):
+            continue
+
+        if kind == RECORD_STEPS:
+            # The phone and the watch both count the same steps, so take only
+            # the device that recorded the workout or the totals double.
+            steps = nz.parse_number(element.get("value"))
+            if steps is None:
+                continue
+            index = bisect.bisect_right(starts, moment) - 1
+            for candidate in (index, index - 1):
+                if candidate < 0:
+                    continue
+                begin, finish, workout = windows[candidate]
+                if not (begin <= moment <= finish):
+                    continue
+                if (workout.get("source_name") or "") != (element.get("sourceName") or ""):
+                    break
+                bucket = (int((moment - begin).total_seconds())
+                          // CADENCE_BUCKET_SEC) * CADENCE_BUCKET_SEC
+                workout["step_buckets"][bucket] = (
+                    workout["step_buckets"].get(bucket, 0) + steps)
+                break
+            continue
+
         bpm = nz.parse_int(element.get("value"))
-        if moment is None or bpm is None or not (earliest <= moment <= latest):
+        if bpm is None:
             continue
 
         # The last window beginning at or before this sample, and the one before
@@ -343,8 +416,9 @@ def load_export(path: str | Path, *, with_routes: bool = True,
                 result.warnings.append(f"{path.name}: no {XML_NAME} inside the zip")
                 return result
             with archive.open(xml_name) as stream:
-                workouts, warnings = _read_workouts(stream)
+                workouts, warnings, metrics = _read_workouts(stream)
             result.warnings.extend(warnings)
+            result.metrics = metrics
             result.seen = len(workouts)
             kept, result.duplicates = deduplicate(workouts)
             if kept and with_hr:
@@ -354,8 +428,9 @@ def load_export(path: str | Path, *, with_routes: bool = True,
                 _load_routes_from_zip(archive, names, kept, result)
     else:
         with path.open("rb") as stream:
-            workouts, warnings = _read_workouts(stream)
+            workouts, warnings, metrics = _read_workouts(stream)
         result.warnings.extend(warnings)
+        result.metrics = metrics
         result.seen = len(workouts)
         kept, result.duplicates = deduplicate(workouts)
         if kept and with_hr:

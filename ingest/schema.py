@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS runs (
     max_hr          INTEGER,
     elevation_ft    REAL,
     cadence         INTEGER,
+    steps           INTEGER,
     calories        INTEGER,
     workout_type    TEXT,
     effort          TEXT,
@@ -47,6 +48,8 @@ CREATE TABLE IF NOT EXISTS runs (
     humidity_pct    REAL,
     route_points    INTEGER,                   -- point count, so the UI can skip a join
     weather_place   TEXT,                      -- which weather_hours cell this run sits in
+    vo2_max         REAL,                      -- the Watch's estimate current on this run
+    vo2_max_date    TEXT,                      -- when it was measured; may predate the run
     imported_at     TEXT    NOT NULL
 );
 
@@ -104,6 +107,36 @@ CREATE TABLE IF NOT EXISTS weather_hours (
 -- here does not quietly reappear on the next import -- which it otherwise would,
 -- since its identity comes from the spreadsheet and the Health export that keep
 -- producing it.
+-- Health metrics that describe a day rather than a workout: VO2 max today, and
+-- room for HRV or resting heart rate later without another schema change.
+-- Stretches where the watch was paused. Apple's `duration` excludes them but
+-- the samples and GPS points span them, so anything measured off sample
+-- timestamps has to subtract these or it counts standing still as running.
+-- Steps per bucket of a run. Stored raw rather than as a rate so the paused
+-- seconds can be taken out of the denominator when it is read.
+CREATE TABLE IF NOT EXISTS cadence_samples (
+    run_id     INTEGER NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    offset_sec INTEGER NOT NULL,
+    steps      REAL    NOT NULL,
+    span_sec   INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS run_pauses (
+    run_id    INTEGER NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    start_sec INTEGER NOT NULL,
+    end_sec   INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS health_metrics (
+    metric      TEXT NOT NULL,
+    recorded_at TEXT NOT NULL,
+    date        TEXT NOT NULL,
+    value       REAL NOT NULL,
+    unit        TEXT,
+    source_name TEXT,
+    PRIMARY KEY (metric, recorded_at)
+);
+
 CREATE TABLE IF NOT EXISTS excluded_runs (
     run_key     TEXT,
     health_id   TEXT,
@@ -140,6 +173,9 @@ CREATE INDEX IF NOT EXISTS idx_hr_run ON hr_samples(run_id, offset_sec);
 
 CREATE INDEX IF NOT EXISTS idx_route_run ON route_points(run_id, offset_sec);
 
+CREATE INDEX IF NOT EXISTS idx_cadence_run ON cadence_samples(run_id, offset_sec);
+CREATE INDEX IF NOT EXISTS idx_pause_run ON run_pauses(run_id, start_sec);
+CREATE INDEX IF NOT EXISTS idx_metric_date ON health_metrics(metric, date);
 CREATE INDEX IF NOT EXISTS idx_excluded_key ON excluded_runs(run_key);
 CREATE INDEX IF NOT EXISTS idx_excluded_health ON excluded_runs(health_id);
 """
@@ -285,6 +321,9 @@ MIGRATIONS = [
     ("runs", "humidity_pct", "REAL"),
     ("runs", "route_points", "INTEGER"),
     ("runs", "weather_place", "TEXT"),
+    ("runs", "vo2_max", "REAL"),
+    ("runs", "vo2_max_date", "TEXT"),
+    ("runs", "steps", "INTEGER"),
 ]
 
 def init_db(conn: sqlite3.Connection) -> None:

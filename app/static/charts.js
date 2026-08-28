@@ -9,6 +9,8 @@
   const theme = () => ({
     series1: token("--series-1"),
     series2: token("--series-2"),
+    series3: token("--series-3"),
+    series5: token("--series-5"),
     surface: token("--surface-1"),
     text: token("--text-primary"),
     secondary: token("--text-secondary"),
@@ -97,7 +99,13 @@
       marked.forEach((i) => {
         const bar = meta.data[i];
         if (!bar || !values[i]) return;
-        ctx.fillText(opts.format(values[i]), bar.x, bar.y - 6);
+        const text = opts.format(values[i]);
+        // Keep the label inside the plot: the last bar sits against the right
+        // edge, and a wide value would otherwise be cut off there.
+        const half = ctx.measureText(text).width / 2;
+        const area = chart.chartArea;
+        const x = Math.min(Math.max(bar.x, area.left + half), area.right - half);
+        ctx.fillText(text, x, bar.y - 6);
       });
       ctx.restore();
     },
@@ -375,11 +383,272 @@
     });
   }
 
+  function vo2Chart(t) {
+    const rows = data("vo2-data");
+    const trend = data("vo2-trend");
+    const el = document.getElementById("vo2-chart");
+    if (!rows || !el || !rows.length) return null;
+
+    const trendSet = trend && {
+      label: "Trend",
+      type: "line",
+      data: [
+        { x: trend.start_date, y: trend.start_value },
+        { x: trend.end_date, y: trend.end_value },
+      ],
+      borderColor: t.series2,
+      borderWidth: 2,
+      pointRadius: 0,
+      pointHitRadius: 0,
+      fill: false,
+      order: 0,
+    };
+
+    return new Chart(el, {
+      type: "scatter",
+      data: {
+        datasets: [
+          ...(trendSet ? [trendSet] : []),
+          {
+            label: "Daily estimate",
+            order: 1,
+            data: rows.map((r) => ({ x: r.date, y: r.value })),
+            backgroundColor: t.series1,
+            borderColor: t.surface,
+            borderWidth: 2,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+          },
+        ],
+      },
+      options: {
+        ...baseOptions(t),
+        interaction: { mode: "nearest", intersect: false },
+        scales: {
+          x: {
+            ...baseOptions(t).scales.x,
+            type: "category",
+            labels: [...new Set(rows.map((r) => r.date))].sort(),
+            ticks: {
+              ...baseOptions(t).scales.x.ticks,
+              callback(value) {
+                return shortDate(this.getLabelForValue(value));
+              },
+            },
+          },
+          y: {
+            ...baseOptions(t).scales.y,
+            beginAtZero: false,
+            title: { display: true, text: "mL/min·kg", color: t.muted,
+                     font: { size: 11, family: "system-ui, sans-serif" } },
+          },
+        },
+        plugins: {
+          ...baseOptions(t).plugins,
+          legend: {
+            display: !!trendSet,
+            position: "top",
+            align: "end",
+            labels: {
+              boxWidth: 10, boxHeight: 10, usePointStyle: true,
+              color: t.secondary,
+              font: { family: "system-ui, sans-serif", size: 12 },
+            },
+          },
+          tooltip: {
+            ...baseOptions(t).plugins.tooltip,
+            filter: (item) => item.datasetIndex !== 0 || !trendSet,
+            callbacks: {
+              title: (items) => shortDate(items[0].raw.x),
+              label: (item) => `${item.parsed.y.toFixed(1)} mL/min·kg`,
+            },
+          },
+        },
+      },
+    });
+  }
+
+  function elevationChart(t) {
+    const rows = data("elevation-data");
+    const el = document.getElementById("elevation-chart");
+    if (!rows || !el || !rows.length) return null;
+    const mmssFromSec = (s) =>
+      `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
+    return new Chart(el, {
+      type: "line",
+      data: {
+        labels: rows.map((r) => r.offset_sec),
+        datasets: [
+          {
+            data: rows.map((r) => r.altitude_ft),
+            borderColor: t.series3,
+            backgroundColor: t.series3 + "1a",
+            borderWidth: 2,
+            fill: true,
+            tension: 0.3,
+            pointRadius: 0,
+            pointHoverRadius: 5,
+            pointHoverBackgroundColor: t.series3,
+            pointHoverBorderColor: t.surface,
+            pointHoverBorderWidth: 2,
+          },
+        ],
+      },
+      options: {
+        ...baseOptions(t),
+        scales: {
+          ...baseOptions(t).scales,
+          x: {
+            ...baseOptions(t).scales.x,
+            ticks: {
+              ...baseOptions(t).scales.x.ticks,
+              callback(value) {
+                return mmssFromSec(this.getLabelForValue(value));
+              },
+            },
+          },
+          y: {
+            ...baseOptions(t).scales.y,
+            // A 70ft roll over an 800ft course is invisible from zero.
+            beginAtZero: false,
+            title: { display: true, text: "ft", color: t.muted,
+                     font: { size: 11, family: "system-ui, sans-serif" } },
+          },
+        },
+        plugins: {
+          ...baseOptions(t).plugins,
+          tooltip: {
+            ...baseOptions(t).plugins.tooltip,
+            callbacks: {
+              title: (items) => `${mmssFromSec(items[0].label)} into the run`,
+              label: (item) => `${Math.round(item.parsed.y)} ft`,
+            },
+          },
+        },
+      },
+    });
+  }
+
+  function cadenceChart(t) {
+    const rows = data("cadence-data");
+    const el = document.getElementById("cadence-chart");
+    if (!rows || !el || !rows.length) return null;
+    const mmssFromSec = (s) =>
+      `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
+    return new Chart(el, {
+      type: "line",
+      data: {
+        labels: rows.map((r) => r.offset_sec),
+        datasets: [
+          {
+            data: rows.map((r) => r.spm),
+            borderColor: t.series5,
+            backgroundColor: t.series5 + "1a",
+            borderWidth: 2,
+            fill: true,
+            tension: 0.25,
+            pointRadius: 0,
+            pointHoverRadius: 5,
+            pointHoverBackgroundColor: t.series5,
+            pointHoverBorderColor: t.surface,
+            pointHoverBorderWidth: 2,
+          },
+        ],
+      },
+      options: {
+        ...baseOptions(t),
+        scales: {
+          ...baseOptions(t).scales,
+          x: {
+            ...baseOptions(t).scales.x,
+            ticks: {
+              ...baseOptions(t).scales.x.ticks,
+              callback(value) {
+                return mmssFromSec(this.getLabelForValue(value));
+              },
+            },
+          },
+          y: {
+            ...baseOptions(t).scales.y,
+            beginAtZero: false,
+            title: { display: true, text: "spm", color: t.muted,
+                     font: { size: 11, family: "system-ui, sans-serif" } },
+          },
+        },
+        plugins: {
+          ...baseOptions(t).plugins,
+          tooltip: {
+            ...baseOptions(t).plugins.tooltip,
+            callbacks: {
+              title: (items) => `${mmssFromSec(items[0].label)} into the run`,
+              label: (item) => `${item.parsed.y} steps per minute`,
+            },
+          },
+        },
+      },
+    });
+  }
+
+  /* Weekly steps and calories: the same bar treatment as weekly mileage, so the
+     three read as one family. */
+  function weeklyBars(id, t, field, colour, format) {
+    const rows = data("weekly-data");
+    const el = document.getElementById(id);
+    if (!rows || !el) return null;
+    const base = baseOptions(t);
+    return new Chart(el, {
+      type: "bar",
+      data: {
+        labels: rows.map((r) => shortDate(r.week_start)),
+        datasets: [
+          {
+            data: rows.map((r) => r[field] || 0),
+            backgroundColor: colour,
+            borderRadius: 4,
+            borderSkipped: "bottom",
+            barPercentage: 0.86,
+            categoryPercentage: 0.9,
+          },
+        ],
+      },
+      options: {
+        ...base,
+        plugins: {
+          ...base.plugins,
+          labelPeaks: { color: t.secondary, format },
+          tooltip: {
+            ...base.plugins.tooltip,
+            callbacks: {
+              title: (items) => `Week of ${items[0].label}`,
+              label: (item) => format(item.parsed.y),
+            },
+          },
+        },
+        scales: {
+          ...base.scales,
+          y: {
+            ...base.scales.y,
+            ticks: {
+              ...base.scales.y.ticks,
+              callback: (value) =>
+                value >= 1000 ? `${Math.round(value / 1000)}k` : value,
+            },
+          },
+        },
+      },
+      plugins: [labelPeaks],
+    });
+  }
+
   let charts = [];
   function render() {
     charts.forEach((c) => c && c.destroy());
     const t = theme();
-    charts = [weeklyChart(t), loadChart(t), paceChart(t), hrChart(t)];
+    charts = [weeklyChart(t), loadChart(t), paceChart(t), hrChart(t), vo2Chart(t), elevationChart(t), cadenceChart(t),
+      weeklyBars("steps-chart", t, "steps", t.series3,
+                 (v) => `${v.toLocaleString()} steps`),
+      weeklyBars("calories-chart", t, "calories", t.series2,
+                 (v) => `${v.toLocaleString()} cal`)];
   }
 
   document.addEventListener("DOMContentLoaded", render);

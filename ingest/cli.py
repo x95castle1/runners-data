@@ -285,6 +285,62 @@ def preview(result, limit: int = 6) -> None:
               f"{(row.get('notes') or '')[:32]}")
 
 
+def store_metrics(conn, metrics: list[dict]) -> int:
+    if not metrics:
+        return 0
+    conn.executemany(
+        "INSERT OR REPLACE INTO health_metrics (metric, recorded_at, date, value,"
+        " unit, source_name) VALUES (:metric, :recorded_at, :date, :value, :unit,"
+        " :source_name)", metrics)
+    conn.commit()
+    return len(metrics)
+
+
+def attach_vo2(conn, max_stale_days: int = 30) -> dict:
+    """Put the VO2 max estimate that was current on each run onto that run.
+
+    Same-day where there is a reading, otherwise the most recent one before it.
+    Carrying forward is the right reading of this metric -- Apple's figure is a
+    slow rolling estimate, not a measurement of that particular run -- but the
+    date it came from is stored too, so a stale one can say so. Nothing older
+    than a month is carried.
+    """
+    from datetime import date, timedelta
+
+    rows = conn.execute(
+        "SELECT date, AVG(value) AS value FROM health_metrics"
+        " WHERE metric = 'vo2_max' GROUP BY date ORDER BY date").fetchall()
+    if not rows:
+        return {"same_day": 0, "carried": 0, "none": 0}
+
+    import bisect
+
+    days = [r["date"] for r in rows]
+    values = [r["value"] for r in rows]
+    tally = {"same_day": 0, "carried": 0, "none": 0}
+
+    # Completed runs only: a workout still on the plan has no fitness to report,
+    # and a future date would happily pick up today's estimate.
+    conn.execute("UPDATE runs SET vo2_max = NULL, vo2_max_date = NULL"
+                 " WHERE status != 'completed'")
+    for run in conn.execute(
+            "SELECT id, date FROM runs WHERE status = 'completed'").fetchall():
+        index = bisect.bisect_right(days, run["date"]) - 1
+        if index < 0:
+            tally["none"] += 1
+            continue
+        source_day = days[index]
+        stale = (date.fromisoformat(run["date"]) - date.fromisoformat(source_day)).days
+        if stale > max_stale_days:
+            tally["none"] += 1
+            continue
+        conn.execute("UPDATE runs SET vo2_max = ?, vo2_max_date = ? WHERE id = ?",
+                     (round(values[index], 2), source_day, run["id"]))
+        tally["same_day" if stale == 0 else "carried"] += 1
+    conn.commit()
+    return tally
+
+
 def weather_targets(conn) -> list[dict]:
     """Runs in the current training block that have a track to place them.
 
@@ -414,6 +470,13 @@ def main(argv: list[str] | None = None) -> int:
         for path, shape, result in results:
             if shape == "health":
                 weeks_written += write_health(conn, result, args)
+                stored = store_metrics(conn, getattr(result, "metrics", []))
+                if stored:
+                    tally = attach_vo2(conn)
+                    print(f"\nVO2 max: {stored:,} readings stored; "
+                          f"{tally['same_day']} runs got a same-day figure, "
+                          f"{tally['carried']} the most recent before it, "
+                          f"{tally['none']} none")
             else:
                 runs = [{c: row.get(c) for c in RUN_COLUMNS} for row in result.rows]
                 banned_keys, _ = excluded_keys(conn)

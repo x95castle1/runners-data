@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block title %}Dashboard · Runners Data{% endblock %}
 
 {% block body %}
@@ -20,7 +21,7 @@
     <div class="tiles">
       <div class="tile">
         <div class="label">This week</div>
-        <div class="value">
+        <div class="value">{{ icon("ring", this_week.plan_total and this_week.miles / this_week.plan_total or 0) }}
           {{ this_week.miles | num }}{% if this_week.planned_miles %}<span class="unit">of {{ this_week.plan_total | num }}</span>{% else %}<span class="unit">mi</span>{% endif %}
         </div>
         <div class="foot">
@@ -39,31 +40,72 @@
       </div>
       <div class="tile">
         <div class="label">Total distance</div>
-        <div class="value">{{ summary.miles | num }}<span class="unit">mi</span></div>
+        <div class="value">{{ icon("road") }}{{ summary.miles | num }}<span class="unit">mi</span></div>
         <div class="foot">across {{ summary.runs }} runs</div>
       </div>
       <div class="tile">
         <div class="label">Longest run</div>
-        <div class="value">{{ summary.longest | num }}<span class="unit">mi</span></div>
+        <div class="value">{{ icon("peak") }}{{ summary.longest | num }}<span class="unit">mi</span></div>
         <div class="foot">
           {% if bests.longest_run %}{{ bests.longest_run.date | day('%b %-d') }}{% endif %}
         </div>
       </div>
       <div class="tile">
         <div class="label">Average pace</div>
-        <div class="value">{{ summary.avg_pace | pace }}<span class="unit">/mi</span></div>
-        <div class="foot">time ÷ distance, all runs</div>
+        <div class="value">{{ icon("stopwatch") }}{{ summary.avg_pace | pace }}<span class="unit">/mi</span></div>
+        <div class="foot">
+          {%- if trend and trend.seconds_per_month > 1 %}
+            {# the arrow means better, the word carries which way the number moves #}
+            <span class="up">▲ {{ trend.seconds_per_month | num(0) }} sec/mi faster a month</span>
+          {%- elif trend and trend.seconds_per_month < -1 %}
+            <span class="down">▼ {{ (-trend.seconds_per_month) | num(0) }} sec/mi slower a month</span>
+          {%- elif trend %}
+            holding steady
+          {%- else %}
+            time ÷ distance
+          {%- endif %}
+        </div>
       </div>
       <div class="tile">
         <div class="label">Time on feet</div>
-        <div class="value">{{ (summary.seconds / 3600) | num(0) }}<span class="unit">hrs</span></div>
+        <div class="value">{{ icon("hourglass") }}{{ (summary.seconds / 3600) | num(0) }}<span class="unit">hrs</span></div>
         <div class="foot">{{ summary.seconds | duration }} total</div>
       </div>
-      {% if race and not race.past %}
+      {% if summary.steps %}
       <div class="tile">
-        <div class="label">{{ race.name }}</div>
-        <div class="value">{{ race.days }}<span class="unit">days</span></div>
-        <div class="foot">{{ race.date | day('%b %-d, %Y') }}</div>
+        <div class="label">Steps</div>
+        <div class="value">{{ icon("steps") }}{{ summary.steps | millions }}</div>
+        <div class="foot">{{ "{:,}".format(summary.steps) }} in total</div>
+      </div>
+      {% endif %}
+      {% if summary.calories %}
+      <div class="tile">
+        <div class="label">Calories</div>
+        <div class="value">{{ icon("flame") }}{{ summary.calories | millions }}</div>
+        <div class="foot">burned running</div>
+      </div>
+      {% endif %}
+      {% if beats and beats.beats %}
+      <div class="tile">
+        <div class="label">Heartbeats</div>
+        <div class="value">{{ icon("heart") }}{{ beats.beats | millions }}</div>
+        <div class="foot">running, across {{ beats.runs }} runs</div>
+      </div>
+      {% endif %}
+      {% if vo2_summary %}
+      <div class="tile">
+        <div class="label">VO2 max</div>
+        <div class="value">{{ icon("lungs") }}{{ vo2_summary.latest | num(1) }}</div>
+        <div class="foot">
+          {% if vo2_summary.latest >= vo2_summary.best and vo2_summary.is_lifetime_best %}
+            <span class="up">▲ best on record</span>
+          {% elif vo2_summary.latest >= vo2_summary.best %}
+            {# highest in view, but the all-time high sits outside this scope #}
+            <span class="up">▲ best in this block</span>
+          {% else %}
+            peak {{ vo2_summary.best | num(1) }} on {{ vo2_summary.best_date | day('%b %-d') }}
+          {% endif %}
+        </div>
       </div>
       {% endif %}
     </div>
@@ -75,6 +117,17 @@
         <a class="table-link" href="/runs">table view</a>
       </div>
       <div class="chart tall"><canvas id="weekly-chart"></canvas></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Recent runs</h2>
+        <a class="table-link" href="/runs">see all {{ summary.runs }} completed →</a>
+      </div>
+      <div class="table-scroll">
+        {% set rows = recent %}
+        {% include "_runs_table.html" %}
+      </div>
     </div>
 
     <div class="grid-2">
@@ -136,16 +189,75 @@
     </div>
     {% endif %}
 
-    <div class="card">
-      <div class="card-head">
-        <h2>Recent runs</h2>
-        <a class="table-link" href="/runs">see all {{ summary.runs }} completed →</a>
+    {% if weekly %}
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-head">
+          <h2>Weekly steps</h2>
+          <span class="note">last {{ weekly | length }} weeks</span>
+        </div>
+        <div class="chart"><canvas id="steps-chart"></canvas></div>
       </div>
-      <div class="table-scroll">
-        {% set rows = recent %}
-        {% include "_runs_table.html" %}
+      <div class="card">
+        <div class="card-head">
+          <h2>Weekly calories</h2>
+          <span class="note">burned running</span>
+        </div>
+        <div class="chart"><canvas id="calories-chart"></canvas></div>
       </div>
     </div>
+    {% endif %}
+
+    {% if vo2 and vo2 | length > 4 %}
+    <div class="card">
+      <div class="card-head">
+        <h2>VO2 max</h2>
+        <span class="note">
+          the Watch's estimate, one figure per day
+          {%- if vo2_summary.trend %} ·
+            {% if vo2_summary.trend.per_month > 0.05 -%}
+              up {{ vo2_summary.trend.per_month | num(1) }} a month
+            {%- elif vo2_summary.trend.per_month < -0.05 -%}
+              down {{ (-vo2_summary.trend.per_month) | num(1) }} a month
+            {%- else -%}
+              holding steady
+            {%- endif %}
+          {%- endif %}
+        </span>
+      </div>
+      <div class="chart tall"><canvas id="vo2-chart"></canvas></div>
+    </div>
+    {% endif %}
+
+    {% if zone_totals %}
+    <div class="card">
+      <div class="card-head">
+        <h2>Time in heart rate zones</h2>
+        <span class="note">
+          {{ zone_totals | sum(attribute='seconds') | hours }} across
+          {{ zone_totals[0].runs }} of {{ zone_runs }} runs — the rest have no
+          continuous heart-rate data
+        </span>
+      </div>
+      <table class="zones">
+        <tbody>
+          {% set widest = zone_totals | map(attribute='share') | max %}
+          {% for z in zone_totals %}
+            <tr>
+              <td class="zone-name">Zone {{ z.zone }}</td>
+              <td class="zone-bar">
+                <span class="z{{ z.zone }}"
+                      style="width: {{ (z.share / widest * 100) | round(1) if widest else 0 }}%"></span>
+              </td>
+              <td class="zone-time">{{ z.seconds | hours }}</td>
+              <td class="zone-share">{{ (z.share * 100) | num(0) }}%</td>
+              <td class="zone-range">{{ z.label }} bpm</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
 
     <div class="card">
       <div class="card-head"><h2>Personal bests</h2></div>
@@ -188,6 +300,10 @@
     <script id="load-data" type="application/json">{{ load | tojson }}</script>
     <script id="pace-data" type="application/json">{{ paces | tojson }}</script>
     {% if trend %}<script id="trend-data" type="application/json">{{ trend | tojson }}</script>{% endif %}
+    <script id="vo2-data" type="application/json">{{ vo2 | tojson }}</script>
+    {% if vo2_summary and vo2_summary.trend %}
+      <script id="vo2-trend" type="application/json">{{ vo2_summary.trend | tojson }}</script>
+    {% endif %}
     <script src="{{ static_url('vendor/chart.umd.js') }}"></script>
     <script src="{{ static_url('charts.js') }}"></script>
   {% endif %}

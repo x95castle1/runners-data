@@ -98,6 +98,26 @@ def fmt_signed_pace(seconds) -> str:
     return f"{sign}{whole // 60}:{whole % 60:02d}"
 
 
+def fmt_millions(value) -> str:
+    """1200635 -> '1.20M'. A raw seven-digit number is unreadable at a glance."""
+    if value is None:
+        return "-"
+    if value >= 1_000_000:
+        return f"{value / 1_000_000:.2f}M"
+    if value >= 10_000:
+        return f"{value / 1000:.0f}k"
+    return f"{value:,}"
+
+
+def fmt_hours(seconds) -> str:
+    """93120 -> '25h 52m'. Reads better than 25:52:00 for a total this size."""
+    if not seconds:
+        return "0m"
+    hours, remainder = divmod(int(seconds), 3600)
+    minutes = remainder // 60
+    return f"{hours}h {minutes:02d}m" if hours else f"{minutes}m"
+
+
 def fmt_number(value, digits: int = 1) -> str:
     return f"{value:,.{digits}f}" if value is not None else "-"
 
@@ -120,6 +140,8 @@ templates.env.filters.update(
     day=fmt_date,
     num=fmt_number,
     signed=fmt_signed_pace,
+    hours=fmt_hours,
+    millions=fmt_millions,
 )
 
 
@@ -206,6 +228,20 @@ OPTIONAL_COLUMNS = ["avg_hr", "elevation_ft"]
 MIN_HR_SAMPLES = 20
 
 
+def hr_zone_bounds() -> tuple[int, ...]:
+    """Lower edge of zones 2-5, overridable with HR_ZONES in .env.
+
+    The defaults are heart-rate-reserve thresholds at 60/70/80/90%, which is how
+    the Watch draws them; they match what the Fitness app shows for this runner.
+    """
+    raw = os.environ.get("HR_ZONES", "")
+    try:
+        edges = tuple(int(part) for part in raw.split(",") if part.strip())
+    except ValueError:
+        edges = ()
+    return edges if len(edges) == 4 else stats.DEFAULT_HR_ZONES
+
+
 def present_columns(rows: list[dict]) -> set[str]:
     """Which optional columns any row actually fills in.
 
@@ -245,6 +281,11 @@ def dashboard(request: Request, scope: str = "block"):
             load=stats.daily_load(conn, window=7, days=180, since=since),
             paces=stats.pace_series(conn, since=since),
             trend=stats.pace_trend(stats.pace_series(conn, since=since)),
+            vo2=stats.vo2_series(conn, since=since),
+            zone_totals=stats.zone_totals(conn, since, hr_zone_bounds()),
+            beats=stats.total_heartbeats(conn, since),
+            zone_runs=stats.summary(conn, since)["runs"],
+            vo2_summary=stats.vo2_summary(conn, since=since),
             bests=stats.personal_bests(conn, since),
             recent=stats.list_runs(conn, limit=8),
             upcoming=stats.upcoming(conn, limit=5),
@@ -308,6 +349,7 @@ def run_detail(request: Request, run_id: int, logged: str | None = None,
         context.update(
             hr=samples if len(samples) >= MIN_HR_SAMPLES else [],
             hr_sparse=0 < len(samples) < MIN_HR_SAMPLES,
+            zones=stats.hr_zones(conn, run_id, hr_zone_bounds()),
             splits=run_splits,
             split_scale=stats.deviation_scale(run_splits),
             elev_scale=stats.elevation_scale(run_splits),
@@ -321,10 +363,14 @@ def run_detail(request: Request, run_id: int, logged: str | None = None,
                 "humidity": weathered[0]["humidity_pct"],
             } if weathered else None),
             track=stats.track_for_map(points),
+            elevation=stats.elevation_profile(conn, run_id),
+            cadence=stats.cadence_series(conn, run_id),
         )
+        run["heartbeats"] = stats.heartbeats(run.get("avg_hr"), run.get("duration_sec"))
+        conditions = stats.conditions_span(conn, run)
         extra = json.loads(run["extra"]) if run.get("extra") else None
         context.update(run=run, prev_id=prev_id, next_id=next_id, extra=extra,
-                       logged=logged, error=error)
+                       conditions=conditions, logged=logged, error=error)
         return templates.TemplateResponse("run_detail.html", context)
     finally:
         conn.close()

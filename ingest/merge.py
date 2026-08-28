@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 # What Health measured. These overwrite whatever the sheet or the app had.
 MEASURED = [
     "started_at", "duration_sec", "distance_mi", "pace_sec_per_mi",
-    "avg_hr", "max_hr", "min_hr", "elevation_ft", "calories", "cadence",
+    "avg_hr", "max_hr", "min_hr", "elevation_ft", "calories", "cadence", "steps",
     "temperature_f", "humidity_pct", "source_name", "health_id",
     "measured_source", "route_points",
 ]
@@ -210,6 +210,18 @@ def _store_samples(conn, run_id: int, workout: dict) -> None:
     """Replace, never append -- re-importing must not double the series."""
     conn.execute("DELETE FROM hr_samples WHERE run_id = ?", (run_id,))
     conn.execute("DELETE FROM route_points WHERE run_id = ?", (run_id,))
+    conn.execute("DELETE FROM run_pauses WHERE run_id = ?", (run_id,))
+    conn.execute("DELETE FROM cadence_samples WHERE run_id = ?", (run_id,))
+    if workout.get("step_buckets"):
+        conn.executemany(
+            "INSERT INTO cadence_samples (run_id, offset_sec, steps, span_sec)"
+            " VALUES (?, ?, ?, ?)",
+            [(run_id, offset, steps, 60)
+             for offset, steps in sorted(workout["step_buckets"].items())])
+    if workout.get("pauses"):
+        conn.executemany(
+            "INSERT INTO run_pauses (run_id, start_sec, end_sec) VALUES (?, ?, ?)",
+            [(run_id, start, end) for start, end in workout["pauses"]])
     if workout.get("hr_samples"):
         conn.executemany(
             "INSERT INTO hr_samples (run_id, offset_sec, bpm) VALUES (?, ?, ?)",

@@ -260,3 +260,62 @@ def test_the_line_spans_the_actual_dates():
     assert t["start_date"] == rows[0]["date"]
     assert t["end_date"] == rows[-1]["date"]
     assert t["days"] == 210
+
+
+# --- conditions at the start and at the finish ------------------------------
+
+@pytest.fixture
+def run_with_hours(tmp_path):
+    conn = connect(tmp_path / "c.db")
+    init_db(conn)
+    conn.execute(
+        "INSERT INTO runs (run_key, source, date, status, distance_mi, duration_sec,"
+        " started_at, weather_place, temperature_f, humidity_pct, imported_at)"
+        " VALUES ('r', 'apple-health', '2026-08-22', 'completed', 6.0, 3600,"
+        " '2026-08-22T05:00:00-05:00', '40.5,-89.0', 64.4, 95.0, 'x')")
+    conn.executemany(
+        "INSERT INTO route_points (run_id, offset_sec, lat, lon, altitude_ft, speed_mph)"
+        " VALUES (1, ?, 40.5, -88.95, 700, 6)", [(0,), (7200,)])
+    conn.executemany(
+        "INSERT INTO weather_hours (place, hour_ts, temp_f, apparent_f, humidity_pct,"
+        " wind_mph, wind_dir_deg, fetched_at) VALUES ('40.5,-89.0', ?, ?, ?, ?, 5, 0, 'x')",
+        [("2026-08-22T05:00", 63.5, 64.9, 95),
+         ("2026-08-22T06:00", 65.5, 67.0, 92),
+         ("2026-08-22T07:00", 68.5, 70.0, 88)])
+    conn.commit()
+    return conn
+
+
+def test_the_finish_is_the_start_plus_what_changed(run_with_hours):
+    """Anchored on the watch's own reading: it measured where the runner was, the
+    model is only trusted for the delta."""
+    span = stats.conditions_span(run_with_hours, stats.get_run(run_with_hours, 1))
+    assert span["start_f"] == 64.4                      # the watch's figure, untouched
+    # The model warms 5.0F over the two hours, so the finish is 64.4 + 5.0.
+    assert span["end_f"] == pytest.approx(69.4, abs=0.1)
+    assert span["end_humidity"] == pytest.approx(88, abs=0.1)
+
+
+def test_the_wall_clock_end_is_used_not_active_time(run_with_hours):
+    """Weather kept moving through the pauses even though the run didn't."""
+    span = stats.conditions_span(run_with_hours, stats.get_run(run_with_hours, 1))
+    assert span["minutes"] == 120        # route spans 2h; duration_sec says 1h
+
+
+def test_no_weather_cell_means_no_span(tmp_path):
+    conn = connect(tmp_path / "n.db")
+    init_db(conn)
+    conn.execute(
+        "INSERT INTO runs (run_key, source, date, status, duration_sec, started_at,"
+        " temperature_f, imported_at) VALUES ('r', 'apple-health', '2026-08-22',"
+        " 'completed', 3600, '2026-08-22T05:00:00-05:00', 64.4, 'x')")
+    conn.commit()
+    assert stats.conditions_span(conn, stats.get_run(conn, 1)) is None
+
+
+def test_a_run_without_a_watch_reading_falls_back_to_the_model(run_with_hours):
+    run_with_hours.execute("UPDATE runs SET temperature_f = NULL")
+    run_with_hours.commit()
+    span = stats.conditions_span(run_with_hours, stats.get_run(run_with_hours, 1))
+    assert span["start_f"] == pytest.approx(63.5)
+    assert span["end_f"] == pytest.approx(68.5)

@@ -36,18 +36,39 @@
       <div class="k">Distance</div>
       <div class="v">{{ run.distance_mi | num(2) }}<span class="u">mi</span></div>
     </div>
-    <div class="stat">
-      <div class="k">Time</div>
-      <div class="v">{{ run.duration_sec | duration }}</div>
-    </div>
-    <div class="stat">
-      <div class="k">Pace</div>
-      <div class="v">{{ run.pace_sec_per_mi | pace }}<span class="u">/mi</span></div>
-    </div>
+    {# a run still on the plan has no time or pace to show #}
+    {% if run.duration_sec %}
+      <div class="stat">
+        <div class="k">Time</div>
+        <div class="v">{{ run.duration_sec | duration }}</div>
+      </div>
+    {% endif %}
+    {% if run.pace_sec_per_mi %}
+      <div class="stat">
+        <div class="k">Pace</div>
+        <div class="v">{{ run.pace_sec_per_mi | pace }}<span class="u">/mi</span></div>
+      </div>
+    {% endif %}
     {% if run.avg_hr %}
       <div class="stat">
         <div class="k">Avg heart rate</div>
         <div class="v">{{ run.avg_hr }}<span class="u">bpm</span></div>
+      </div>
+    {% endif %}
+    {% if run.vo2_max %}
+      <div class="stat">
+        <div class="k">VO2 max</div>
+        <div class="v">{{ run.vo2_max | num(1) }}</div>
+        {% if run.vo2_max_date != run.date %}
+          {# a carried-forward estimate should say when it was actually taken #}
+          <div class="stat-note">measured {{ run.vo2_max_date | day('%b %-d') }}</div>
+        {% endif %}
+      </div>
+    {% endif %}
+    {% if run.calories %}
+      <div class="stat">
+        <div class="k">Calories</div>
+        <div class="v">{{ run.calories | num(0) }}</div>
       </div>
     {% endif %}
   </div>
@@ -56,16 +77,31 @@
   {% if run.max_hr %}{% set _ = extras.append((run.max_hr, 'bpm max')) %}{% endif %}
   {% if run.min_hr %}{% set _ = extras.append((run.min_hr, 'bpm low')) %}{% endif %}
   {% if run.elevation_ft %}{% set _ = extras.append((run.elevation_ft | num(0), 'ft climbed')) %}{% endif %}
-  {% if run.cadence %}{% set _ = extras.append((run.cadence, 'spm cadence')) %}{% endif %}
-  {% if run.calories %}{% set _ = extras.append((run.calories | num(0), 'calories')) %}{% endif %}
-  {% if run.temperature_f %}{% set _ = extras.append((run.temperature_f | num(0) ~ '°F', 'at the start')) %}{% endif %}
-  {% if run.humidity_pct %}{% set _ = extras.append((run.humidity_pct | num(0) ~ '%', 'humidity')) %}{% endif %}
+  {% if run.steps %}{% set _ = extras.append(("{:,}".format(run.steps), 'steps')) %}{% endif %}
+  {% if conditions and conditions.end_f %}
+    {# start and finish, so a run that warmed up shows it #}
+    {% set _ = extras.append((
+        (conditions.start_f | num(0)) ~ '° → ' ~ (conditions.end_f | num(0)) ~ '°F',
+        'start to finish')) %}
+  {% elif run.temperature_f %}
+    {% set _ = extras.append((run.temperature_f | num(0) ~ '°F', 'at the start')) %}
+  {% endif %}
+  {% if conditions and conditions.end_humidity %}
+    {% set _ = extras.append((
+        (conditions.start_humidity | num(0)) ~ '% → ' ~ (conditions.end_humidity | num(0)) ~ '%',
+        'humidity')) %}
+  {% elif run.humidity_pct %}
+    {% set _ = extras.append((run.humidity_pct | num(0) ~ '%', 'humidity')) %}
+  {% endif %}
   {% if run.effort %}{% set _ = extras.append((run.effort, 'effort')) %}{% endif %}
-  {% if extras %}
+  {% if extras or run.heartbeats %}
     <div class="stat-secondary">
       {% for value, label in extras %}
         <span><b>{{ value }}</b> {{ label }}</span>
       {% endfor %}
+      {% if run.heartbeats %}
+        <span><svg class="heart" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 20.7 4.6 13.3a4.9 4.9 0 0 1 0-6.9 4.9 4.9 0 0 1 6.9 0l.5.5.5-.5a4.9 4.9 0 0 1 6.9 0 4.9 4.9 0 0 1 0 6.9z"/></svg> <b>{{ "{:,}".format(run.heartbeats) }}</b> heartbeats</span>
+      {% endif %}
     </div>
   {% endif %}
 
@@ -96,6 +132,33 @@
         workouts and thins older ones down to these figures
         {%- if hr_sparse %} plus a few scattered readings{% endif %}.
       </p>
+    </div>
+  {% endif %}
+
+  {% if zones %}
+    <div class="card">
+      <div class="card-head">
+        <h2>Time in heart rate zones</h2>
+        <span class="note">estimated from {{ hr | length }} readings, paused time excluded</span>
+      </div>
+      <table class="zones">
+        <tbody>
+          {% set widest = zones | map(attribute='share') | max %}
+          {% for z in zones %}
+            <tr>
+              <td class="zone-name">Zone {{ z.zone }}</td>
+              <td class="zone-bar">
+                {# scaled against the biggest zone so the shape of the run reads #}
+                <span class="z{{ z.zone }}"
+                      style="width: {{ (z.share / widest * 100) | round(1) if widest else 0 }}%"></span>
+              </td>
+              <td class="zone-time">{{ z.seconds | duration }}</td>
+              <td class="zone-share">{{ (z.share * 100) | num(0) }}%</td>
+              <td class="zone-range">{{ z.label }} bpm</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
   {% endif %}
 
@@ -191,6 +254,31 @@
           </tbody>
         </table>
       </div>
+    </div>
+  {% endif %}
+
+  {% if cadence %}
+    <div class="card">
+      <div class="card-head">
+        <h2>Cadence</h2>
+        <span class="note">
+          steps per minute{% if run.cadence %} · {{ run.cadence }} spm average{% endif %}
+        </span>
+      </div>
+      <div class="chart"><canvas id="cadence-chart"></canvas></div>
+    </div>
+  {% endif %}
+
+  {% if elevation %}
+    <div class="card">
+      <div class="card-head">
+        <h2>Elevation</h2>
+        <span class="note">
+          {{ run.elevation_ft | num(0) }} ft climbed · smoothed from
+          {{ run.route_points }} GPS readings
+        </span>
+      </div>
+      <div class="chart"><canvas id="elevation-chart"></canvas></div>
     </div>
   {% endif %}
 
@@ -293,6 +381,14 @@
 {% block scripts %}
   {% if hr %}
     <script id="hr-data" type="application/json">{{ hr | tojson }}</script>
+  {% endif %}
+  {% if cadence %}
+    <script id="cadence-data" type="application/json">{{ cadence | tojson }}</script>
+  {% endif %}
+  {% if elevation %}
+    <script id="elevation-data" type="application/json">{{ elevation | tojson }}</script>
+  {% endif %}
+  {% if hr or cadence or elevation %}
     <script src="{{ static_url('vendor/chart.umd.js') }}"></script>
     <script src="{{ static_url('charts.js') }}"></script>
   {% endif %}

@@ -254,6 +254,12 @@ than the worst one, because a mile spent waiting at a level crossing would
 otherwise flatten every real difference; a mile past the scale clamps with a flat
 end and still prints its figure.
 
+The run header shows conditions **start to finish** — `64° → 68°F`, `95% → 82%
+humidity` — anchored on the watch's own opening reading with the hourly model
+supplying only how much things changed. The watch measured the absolute value
+where you actually were; the model is better at the change than at the level.
+A run outside the weather backfill still shows the single reading Apple recorded.
+
 Each split also shows the **apparent temperature** at the moment you ran it and
 the **wind along your heading** — a headwind or a tailwind in mph, worked out
 from the split's GPS bearing against the wind direction. That last one is the
@@ -287,6 +293,90 @@ street.
 A failed lookup is never fatal. The import finishes, reports what it couldn't
 fetch, and picks it up next run. `make ingest ARGS=--no-weather` keeps the whole
 import offline.
+
+## Heart rate zones
+
+Each run shows how long you spent in each of the five zones, with the bar scaled
+against the biggest zone so the shape of the effort reads at a glance.
+
+Thresholds default to **126 / 138 / 149 / 161 bpm** — heart-rate-reserve at
+60/70/80/90%, the way the Watch computes them, for a resting rate of 55 and a
+maximum of 173. Change them with `HR_ZONES=126,138,149,161` in `.env`.
+
+Time is credited from each reading up to the next, so an irregular sampling rate
+doesn't distort it, and a gap longer than a minute is dropped rather than handed
+to whichever zone happened to be current.
+
+### Heartbeats
+
+Each run also shows how many times your heart beat during it, and the dashboard
+carries the total for the block — 1.2 million across 121 runs, 2.8 million since
+2019.
+
+It's average heart rate times active duration. That sounds like a rough stand-in
+and isn't: Apple's average is a time-weighted mean over active time, so it's the
+same quantity as integrating the samples. Checked against that integration on 57
+runs the median difference is under one percent, and it covers nearly every run
+rather than only the densely sampled ones.
+
+### Cadence and the climb
+
+Two more charts per run, below heart rate.
+
+**Cadence** is steps per minute, bucketed to the minute from the step records —
+taking only the device that recorded the workout, since the phone and the watch
+both count the same steps and using both doubles them. Steps are divided by the
+*active* seconds in each minute, so a minute half spent at a crossing reports the
+cadence of the half that was run. A three-point median then removes single-minute
+stops, which read as 44 spm and are the absence of running rather than a cadence;
+a genuine fade lasts longer than a minute and survives it.
+
+**Elevation** is the course profile. Raw GPS altitude jitters a foot or two
+between readings — enough that summing the raw ups gives 738 ft of climb on a run
+the watch calls 525 — so a centred rolling mean flattens the jitter without
+moving the hills.
+
+### Paused time
+
+Apple's `duration` excludes time the watch was paused, but the samples and GPS
+points span it. Anything measured off sample timestamps therefore counts standing
+still as running unless it subtracts the pauses — worth 17 minutes on one long
+run here, and it made a mile with a five-minute stop in it look eight minutes
+slower than it was.
+
+Pause windows are read from the export's `WorkoutEvent` records and stored per
+run, and both the zone times and the per-mile splits subtract them. Zone totals
+now land within a second or two of the run's stated duration, which is the check
+that says it's right.
+
+## VO2 max
+
+The Watch has been estimating it since 2021, and `make ingest` now picks those
+readings out of the same export pass that reads the workouts — so they cost
+nothing extra to collect. They land in a `health_metrics` table, which has room
+for HRV or resting heart rate later without another schema change.
+
+Each run carries the figure that was **current on the day you ran**. Where the day
+has its own reading that is what you get; otherwise the most recent one before it
+carries forward, because Apple's number is a slow rolling estimate rather than a
+measurement of that particular run. The date it came from is stored alongside, so
+a run detail page says *"measured Aug 18"* when the figure isn't same-day, and
+nothing older than a month is carried at all.
+
+The dashboard gets a tile and a chart with the same scatter-and-trend treatment as
+Pace over time. Both are scoped by the training-block toggle, and the tile only
+claims *"best on record"* when the reading really is the all-time high rather than
+just the best in view.
+
+## Steps and calories
+
+Both come straight from the workout's own statistics, stored per run. The
+dashboard carries the block totals and a weekly bar chart for each, alongside
+weekly mileage; the run page shows the figures for that run.
+
+Steps are Apple's own count for the workout rather than a sum of the per-minute
+buckets used for cadence — the two agree within about a percent, and the workout
+figure is the one the Fitness app reports.
 
 ## Removing a run
 

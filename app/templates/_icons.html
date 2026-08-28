@@ -1,0 +1,49 @@
+{# Hand-drawn line icons, one family: 24x24 box, 1.8px stroke, round joins, and
+   currentColor so a single CSS rule sets them all. No icon library, so nothing
+   here is fetched at runtime. #}
+{% macro icon(name, fraction=0) -%}
+<svg class="stat-icon icon-{{ name }}" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+     aria-hidden="true">
+{%- if name == 'ring' -%}
+  {# Progress toward the week's plan: the arc is the data, not decoration. #}
+  <circle cx="12" cy="12" r="9" stroke="currentColor" opacity="0.25"/>
+  <circle cx="12" cy="12" r="9" pathLength="100"
+          stroke-dasharray="{{ (fraction * 100) | round(1) }} 100"
+          transform="rotate(-90 12 12)"/>
+{%- elif name == 'road' -%}
+  {# A single route with its two ends marked. Two crossing curves read as a
+     scribble at this size. #}
+  <path d="M6 19c5 0 3-6 6-7s5 1 6-3"/>
+  <circle cx="5" cy="19" r="2" fill="currentColor" stroke="none"/>
+  <circle cx="19" cy="8" r="2" fill="currentColor" stroke="none"/>
+{%- elif name == 'peak' -%}
+  <path d="M2 19l6.5-11 4 6.5 2.5-4L22 19z"/>
+{%- elif name == 'stopwatch' -%}
+  <circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4l2.5 2"/>
+  <path d="M9.5 2h5M12 2v3.5"/>
+{%- elif name == 'hourglass' -%}
+  <path d="M6 2h12M6 22h12"/>
+  <path d="M17 2c0 4-5 6-5 10s5 6 5 10"/>
+  <path d="M7 2c0 4 5 6 5 10s-5 6-5 10"/>
+{%- elif name == 'steps' -%}
+  {# Two prints, filled. Outlines of something this small turn to mush. #}
+  <ellipse cx="8" cy="7.5" rx="3" ry="4.5" fill="currentColor" stroke="none"/>
+  <ellipse cx="8" cy="14" rx="2.2" ry="1.7" fill="currentColor" stroke="none"/>
+  <ellipse cx="16" cy="12" rx="3" ry="4.5" fill="currentColor" stroke="none" opacity="0.45"/>
+  <ellipse cx="16" cy="18.5" rx="2.2" ry="1.7" fill="currentColor" stroke="none" opacity="0.45"/>
+{%- elif name == 'flame' -%}
+  {# The kink on the left edge is what stops this reading as a raindrop. #}
+  <path d="M13 2.5c.4 3 -1 4.4-2.6 5.9C8.4 10.2 6 12 6 15a6 6 0 0 0 12 0c0-3.4-2.2-5.6-3.6-7.4"/>
+  <path d="M12 21a2.9 2.9 0 0 1-2.9-2.9c0-1.7 1.4-2.6 2.2-3.9.9 1.2 3.6 2.3 3.6 3.9A2.9 2.9 0 0 1 12 21z"
+        opacity="0.45"/>
+{%- elif name == 'heart' -%}
+  <path d="M12 20.3 4.7 13a4.8 4.8 0 0 1 0-6.8 4.8 4.8 0 0 1 6.8 0l.5.5.5-.5a4.8 4.8 0 0 1 6.8 0 4.8 4.8 0 0 1 0 6.8z"/>
+{%- elif name == 'lungs' -%}
+  {# Lungs are unreadable at 21px, so: a gauge with the needle high. #}
+  <path d="M3.5 18a8.5 8.5 0 1 1 17 0"/>
+  <path d="M12 18l5-6"/>
+  <circle cx="12" cy="18" r="1.6" fill="currentColor" stroke="none"/>
+{%- endif -%}
+</svg>
+{%- endmacro %}

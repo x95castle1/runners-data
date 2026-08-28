@@ -17,6 +17,7 @@
   --series-4:       #eda100;
   --series-5:       #e87ba4;
   --good:           #006300;
+  --heart:          #e34948;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -37,6 +38,7 @@
     --series-4:       #c98500;
     --series-5:       #d55181;
     --good:           #0ca30c;
+    --heart:          #e66767;
   }
 }
 
@@ -57,6 +59,7 @@
   --series-4:       #c98500;
   --series-5:       #d55181;
   --good:           #0ca30c;
+  --heart:          #e66767;
 }
 
 * { box-sizing: border-box; }
@@ -126,12 +129,17 @@ h2 { font-size: 16px; letter-spacing: -0.01em; margin: 0; font-weight: 650; }
 /* --- stat tiles --------------------------------------------------------- */
 
 .tiles {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  /* Flex rather than grid so a row that doesn't divide evenly stretches its
+     tiles to fill instead of leaving one stranded beside empty space. */
+  display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 24px;
 }
 .tile {
+  /* A wide basis on purpose: it caps the row at five, so nine tiles break as
+     5 + 4 rather than 7 + 2 with two stretched across half the page. */
+  flex: 1 1 200px;
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -158,6 +166,7 @@ h2 { font-size: 16px; letter-spacing: -0.01em; margin: 0; font-weight: 650; }
 }
 .tile .foot { color: var(--muted); font-size: 12px; margin-top: 4px; }
 .tile .foot .up { color: var(--good); }
+.tile .foot .down { color: var(--series-2); }
 
 /* --- cards & charts ----------------------------------------------------- */
 
@@ -527,6 +536,11 @@ td.dev { width: 32%; min-width: 200px; padding-right: 0; }
   margin-top: 4px;
   white-space: nowrap;
 }
+.stat-primary .stat-note {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 4px;
+}
 .stat-primary .v .u {
   font-size: 14px;
   font-weight: 500;
@@ -553,3 +567,73 @@ td.dev { width: 32%; min-width: 200px; padding-right: 0; }
   font-weight: 620;
   font-variant-numeric: tabular-nums;
 }
+
+/* --- time in heart rate zones -------------------------------------------- */
+
+/* Ordered by effort, so the colours run cool to hot. Every row is labelled with
+   its zone, time and bpm range, so the colour reinforces the ordering rather
+   than carrying any identity of its own. */
+.zones { width: 100%; border-collapse: collapse; }
+.zones td { padding: 9px 0; border-bottom: 1px solid var(--grid); }
+.zones tr:last-child td { border-bottom: 0; }
+
+.zone-name { width: 72px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+.zone-bar { width: 50%; padding-right: 18px !important; }
+.zone-bar span {
+  display: block;
+  height: 10px;
+  min-width: 6px;              /* a near-empty zone still shows something */
+  border-radius: 5px;
+}
+.zone-time {
+  width: 74px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+  font-weight: 600;
+}
+.zone-share {
+  width: 56px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.zone-range {
+  text-align: right;
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.zone-bar .z1 { background: var(--series-1); }   /* blue  — easiest */
+.zone-bar .z2 { background: var(--series-3); }   /* aqua */
+.zone-bar .z3 { background: var(--series-4); }   /* yellow */
+.zone-bar .z4 { background: var(--series-2); }   /* orange */
+.zone-bar .z5 { background: var(--series-5); }   /* magenta — hardest */
+
+
+/* A heart beside a beat count. Decoration, not an encoding -- the number and its
+   label carry the meaning. */
+.heart {
+  color: var(--heart);
+  vertical-align: -1px;
+  flex: none;
+}
+
+/* Tile icons: one muted grey throughout, so they read as a family and never
+   compete with the figure beside them or with the colours the charts use to
+   mean something. */
+.tile .value .stat-icon {
+  width: 21px;
+  height: 21px;
+  color: var(--muted);
+  vertical-align: -2px;
+  margin-right: 7px;
+  flex: none;
+}
+/* The one exception to the single grey. A heart is red everywhere, so a grey one
+   reads as a mistake rather than as restraint -- and it matches the heart on the
+   run pages. Every other icon stays neutral so this stays the exception. */
+.tile .value .icon-heart { color: var(--heart); }
