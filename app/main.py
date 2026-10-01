@@ -229,10 +229,14 @@ MIN_HR_SAMPLES = 20
 
 # Reference points for the tile equivalences. Gathered here so the arithmetic is
 # visible and arguable rather than buried in a template.
-WILLIS_TOWER_STEPS = 2109   # to the 103rd floor, the SkyRise Chicago climb
+SEARS_TOWER_STEPS = 2109    # to the 103rd floor, the SkyRise Chicago climb
 PIZZA_SLICE_CAL = 285
-RESTING_HR = 54             # this runner's 2026 median, from the Health export
 POUNDS_PER_KG = 0.45359
+
+# Blood moved per beat. 100 mL is a trained adult under exercise; at rest it is
+# nearer 70, and every one of these beats was run rather than sat through.
+STROKE_VOLUME_ML = 100
+ML_PER_US_GALLON = 3785.41
 
 
 def tile_facts(conn, summary: dict, beats: dict, vo2: dict | None) -> dict:
@@ -243,14 +247,14 @@ def tile_facts(conn, summary: dict, beats: dict, vo2: dict | None) -> dict:
     """
     facts = {}
     if summary.get("steps"):
-        facts["steps"] = (f"{summary['steps'] / WILLIS_TOWER_STEPS:,.0f}",
-                          "climbs of Willis Tower")
+        facts["steps"] = (f"{summary['steps'] / SEARS_TOWER_STEPS:,.0f}",
+                          "climbs of Sears Tower")
     if summary.get("calories"):
         facts["calories"] = (f"{summary['calories'] / PIZZA_SLICE_CAL:,.0f}",
                              "slices of pizza")
     if beats and beats.get("beats"):
-        days = beats["beats"] / (RESTING_HR * 60 * 24)
-        facts["beats"] = (f"{days:.0f}", "days of resting beats")
+        gallons = beats["beats"] * STROKE_VOLUME_ML / ML_PER_US_GALLON
+        facts["beats"] = (f"{gallons:,.0f}", "gallons of beer pumped")
     weight = stats.latest_weight_lb(conn)
     if vo2 and weight:
         # mL/min/kg x kg -> litres of oxygen a minute at maximum effort.
