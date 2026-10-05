@@ -1,10 +1,20 @@
 # Runners Data
 
 A local web app for browsing your marathon training log. Export your spreadsheet
-to CSV, ingest it, and browse it at `http://localhost:8000` in a Docker container
-that never talks to the outside world.
+and your Apple Health data, ingest them, and browse everything at
+`http://localhost:8000` in a Docker container. Your data stays on the machine —
+the only things that leave it are map tiles and a weather lookup, both covered
+under [The one thing that leaves your machine](#the-one-thing-that-leaves-your-machine).
 
-![dashboard](docs/dashboard.png)
+**The dashboard** — totals, weekly mileage, steps and calories, training load,
+pace and VO2 max trends, and time in heart-rate zones across the block:
+
+![The training dashboard](docs/dashboard.png)
+
+**A single run** — heart rate, time in zones, per-mile splits with weather and
+headwind, cadence, the elevation profile, and the route:
+
+![A run detail page](docs/run-detail.png)
 
 ## Quick start
 
