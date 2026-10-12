@@ -1,5 +1,10 @@
 # Chicago Marathon — Sunday 11 October 2026
 
+> **How it went:** finished in 6:47:57. Resting heart rate on race morning was 69
+> against a 53 baseline — see [RACE-ANALYSIS.md](RACE-ANALYSIS.md). The 5:45–5:50
+> estimate below also leaned too heavily on the April half; Riegel off the Aug 29
+> twenty-miler gives 6:03, which was the better projection.
+
 Built from 139 runs in this training block. Every figure below comes from your
 own data unless marked otherwise.
 
